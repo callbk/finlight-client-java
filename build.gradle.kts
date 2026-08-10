@@ -5,7 +5,7 @@ plugins {
   `maven-publish`
   signing
   id("com.diffplug.spotless") version "7.0.2"
-  id("net.ltgt.errorprone") version "4.1.0"
+  id("net.ltgt.errorprone") version "5.1.0"
 }
 
 description = "Official JVM client for the finlight.me financial news API"
@@ -86,7 +86,7 @@ tasks.withType<JavaCompile>().configureEach {
 
 tasks.named<JavaCompile>("compileLocalJava") {
   // local/ holds throwaway verification scripts in the default package.
-  options.errorprone.isEnabled.set(false)
+  options.errorprone.enabled.set(false)
 }
 
 tasks.processResources {
