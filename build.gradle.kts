@@ -75,11 +75,17 @@ tasks.register<JavaExec>("soak") {
   mainClass.set("Soak")
 }
 
+// Error Prone 2.50+ itself requires JDK 21+ to run. options.release=17 still
+// guarantees Java 17 compatibility; the JDK 17 CI job compiles and tests
+// without linting, the JDK 21 job and local builds lint.
+val errorProneSupported = JavaVersion.current() >= JavaVersion.VERSION_21
+
 tasks.withType<JavaCompile>().configureEach {
   // Target Java 17 (LTS) regardless of the JDK running the build.
   options.release.set(17)
   options.encoding = "UTF-8"
   options.errorprone {
+    enabled.set(errorProneSupported)
     disableWarningsInGeneratedCode.set(true)
   }
 }
