@@ -10,6 +10,13 @@ plugins {
 
 description = "Official JVM client for the finlight.me financial news API"
 
+// Error Prone 2.50+ ships class-file 65 bytecode and requires JDK 21+ to run.
+// javac service-loads every plugin on the processor path even when unused, so
+// the dependency itself must stay off the classpath on older JDKs.
+// options.release=17 still guarantees Java 17 compatibility; the JDK 17 CI job
+// compiles and tests without linting, the JDK 21 job and local builds lint.
+val errorProneSupported = JavaVersion.current() >= JavaVersion.VERSION_21
+
 java {
   withSourcesJar()
   withJavadocJar()
@@ -33,7 +40,9 @@ dependencies {
   testRuntimeOnly("org.junit.platform:junit-platform-launcher")
   testRuntimeOnly("org.slf4j:slf4j-simple:2.0.17")
 
-  errorprone("com.google.errorprone:error_prone_core:2.50.0")
+  if (errorProneSupported) {
+    errorprone("com.google.errorprone:error_prone_core:2.50.0")
+  }
 }
 
 spotless {
@@ -74,11 +83,6 @@ tasks.register<JavaExec>("soak") {
   classpath = localSourceSet.runtimeClasspath
   mainClass.set("Soak")
 }
-
-// Error Prone 2.50+ itself requires JDK 21+ to run. options.release=17 still
-// guarantees Java 17 compatibility; the JDK 17 CI job compiles and tests
-// without linting, the JDK 21 job and local builds lint.
-val errorProneSupported = JavaVersion.current() >= JavaVersion.VERSION_21
 
 tasks.withType<JavaCompile>().configureEach {
   // Target Java 17 (LTS) regardless of the JDK running the build.
