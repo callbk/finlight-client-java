@@ -1,0 +1,12 @@
+.gradle/
+build/
+out/
+
+# Local-only scripts and credentials — never commit
+local/
+.env
+.env.*
+.idea/
+*.iml
+.DS_Store
+local.properties
