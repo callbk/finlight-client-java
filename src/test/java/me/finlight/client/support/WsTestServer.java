@@ -1,5 +1,6 @@
 package me.finlight.client.support;
 
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
@@ -43,7 +44,7 @@ public final class WsTestServer extends WebSocketServer implements AutoCloseable
   private final AtomicInteger connections = new AtomicInteger();
 
   private WsTestServer(OpenHandler openHandler, MessageHandler messageHandler) {
-    super(new InetSocketAddress("127.0.0.1", 0));
+    super(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0));
     setReuseAddr(true);
     this.openHandler = openHandler;
     this.messageHandler = messageHandler;

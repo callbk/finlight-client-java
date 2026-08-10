@@ -1,5 +1,9 @@
 # finlight-client (JVM)
 
+[![Maven Central](https://img.shields.io/maven-central/v/me.finlight/finlight-client)](https://central.sonatype.com/artifact/me.finlight/finlight-client)
+[![JitPack](https://jitpack.io/v/callbk/finlight-client-java.svg)](https://jitpack.io/#callbk/finlight-client-java)
+[![CI](https://github.com/callbk/finlight-client-java/actions/workflows/test.yml/badge.svg)](https://github.com/callbk/finlight-client-java/actions/workflows/test.yml)
+
 The official JVM client for the [finlight.me](https://finlight.me) API — financial news with sentiment analysis, entity recognition, and real-time streaming. Written in Java 17, designed for first-class Kotlin interop (JSpecify null-marked API, immutable records, builders).
 
 📚 **Full API documentation: [docs.finlight.me](https://docs.finlight.me)**
@@ -32,6 +36,18 @@ Maven:
     <artifactId>finlight-client</artifactId>
     <version>0.1.0</version>
 </dependency>
+```
+
+Alternatively via [JitPack](https://jitpack.io/#callbk/finlight-client-java), built straight from the GitHub tag:
+
+```kotlin
+repositories {
+    maven("https://jitpack.io")
+}
+
+dependencies {
+    implementation("com.github.callbk:finlight-client-java:v0.1.0")
+}
 ```
 
 ## Quick Start

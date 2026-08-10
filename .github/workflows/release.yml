@@ -1,8 +1,10 @@
 name: Release
 
-# Publishes the tagged version to Maven Central.
-# Requires repository secrets: SIGNING_KEY, SIGNING_PASSWORD,
-# OSSRH_USERNAME, OSSRH_PASSWORD (see README/publishing notes).
+# Publishes the tagged version to Maven Central (Central Portal).
+# Repository secrets (publish is skipped gracefully while they are missing):
+#   MAVEN_CENTRAL_USERNAME / MAVEN_CENTRAL_PASSWORD  - Central Portal token
+#   SIGNING_KEY / SIGNING_PASSWORD                   - ASCII-armored PGP key
+# JitPack needs no publishing: it builds straight from the git tag.
 
 on:
   push:
@@ -11,12 +13,14 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    env:
+      MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: "21"
       - uses: gradle/actions/setup-gradle@v4
       - name: Set version from tag
         run: |
@@ -24,10 +28,14 @@ jobs:
           sed -i "s/^version=.*/version=${VERSION}/" gradle.properties
       - name: Build and test
         run: ./gradlew build
-      - name: Publish
+      - name: Publish to Maven Central
+        if: env.MAVEN_CENTRAL_USERNAME != ''
         env:
-          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
-          SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
-          OSSRH_USERNAME: ${{ secrets.OSSRH_USERNAME }}
-          OSSRH_PASSWORD: ${{ secrets.OSSRH_PASSWORD }}
-        run: ./gradlew publish
+          ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_KEY }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_PASSWORD }}
+        run: ./gradlew publishToMavenCentral --no-configuration-cache
+      - name: Publish skipped
+        if: env.MAVEN_CENTRAL_USERNAME == ''
+        run: echo "MAVEN_CENTRAL_USERNAME secret not set - skipping Maven Central publish."

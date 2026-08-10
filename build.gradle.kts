@@ -2,10 +2,9 @@ import net.ltgt.gradle.errorprone.errorprone
 
 plugins {
   `java-library`
-  `maven-publish`
-  signing
   id("com.diffplug.spotless") version "7.0.2"
   id("net.ltgt.errorprone") version "5.1.0"
+  id("com.vanniktech.maven.publish") version "0.33.0"
 }
 
 description = "Official JVM client for the finlight.me financial news API"
@@ -16,11 +15,6 @@ description = "Official JVM client for the finlight.me financial news API"
 // options.release=17 still guarantees Java 17 compatibility; the JDK 17 CI job
 // compiles and tests without linting, the JDK 21 job and local builds lint.
 val errorProneSupported = JavaVersion.current() >= JavaVersion.VERSION_21
-
-java {
-  withSourcesJar()
-  withJavadocJar()
-}
 
 repositories {
   mavenCentral()
@@ -120,41 +114,34 @@ tasks.javadoc {
   }
 }
 
-publishing {
-  publications {
-    create<MavenPublication>("maven") {
-      from(components["java"])
-      pom {
-        name.set("finlight-client")
-        description.set(project.description)
-        url.set("https://finlight.me")
-        licenses {
-          license {
-            name.set("MIT License")
-            url.set("https://opensource.org/licenses/MIT")
-          }
-        }
-        developers {
-          developer {
-            name.set("finlight.me")
-            email.set("info@finlight.me")
-          }
-        }
-        scm {
-          url.set("https://github.com/callbk/finlight-client-java")
-          connection.set("scm:git:https://github.com/callbk/finlight-client-java.git")
-        }
+mavenPublishing {
+  // Group/version stay overridable (-Pgroup/-Pversion) so JitPack builds work.
+  coordinates(group.toString(), "finlight-client", version.toString())
+  publishToMavenCentral(automaticRelease = true)
+  // Sign only when a key is configured (e.g. in the release workflow); JitPack
+  // and plain CI builds run unsigned.
+  if (providers.gradleProperty("signingInMemoryKey").isPresent) {
+    signAllPublications()
+  }
+  pom {
+    name.set("finlight-client")
+    description.set(project.description)
+    url.set("https://finlight.me")
+    licenses {
+      license {
+        name.set("MIT License")
+        url.set("https://opensource.org/licenses/MIT")
       }
     }
-  }
-}
-
-// Sign only when a key is configured (e.g. in the release workflow).
-signing {
-  val signingKey = System.getenv("SIGNING_KEY")
-  val signingPassword = System.getenv("SIGNING_PASSWORD")
-  if (!signingKey.isNullOrBlank()) {
-    useInMemoryPgpKeys(signingKey, signingPassword)
-    sign(publishing.publications["maven"])
+    developers {
+      developer {
+        name.set("finlight.me")
+        email.set("info@finlight.me")
+      }
+    }
+    scm {
+      url.set("https://github.com/callbk/finlight-client-java")
+      connection.set("scm:git:https://github.com/callbk/finlight-client-java.git")
+    }
   }
 }
