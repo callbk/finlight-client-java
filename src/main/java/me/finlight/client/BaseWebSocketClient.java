@@ -488,8 +488,9 @@ public abstract class BaseWebSocketClient<TArticle, TParams> {
       ScheduledExecutorService localScheduler = scheduler;
       if (localScheduler != null && !localScheduler.isShutdown()) {
         try {
-          localScheduler.schedule(
-              () -> abort(reason), CLOSE_ABORT_GRACE_MILLIS, TimeUnit.MILLISECONDS);
+          Future<?> unused =
+              localScheduler.schedule(
+                  () -> abort(reason), CLOSE_ABORT_GRACE_MILLIS, TimeUnit.MILLISECONDS);
         } catch (java.util.concurrent.RejectedExecutionException ignored) {
           // scheduler already shut down; the reconnect loop has ended anyway
         }
