@@ -1,28 +1,28 @@
 # finlight-client (JVM)
 
-*English | [简体中文](README.zh-CN.md) | [日本語](README.ja.md) | [한국어](README.ko.md)*
+*[English](README.md) | 简体中文 | [日本語](README.ja.md) | [한국어](README.ko.md)*
 
 [![Maven Central](https://img.shields.io/maven-central/v/me.finlight/finlight-client)](https://central.sonatype.com/artifact/me.finlight/finlight-client)
 [![JitPack](https://jitpack.io/v/callbk/finlight-client-java.svg)](https://jitpack.io/#callbk/finlight-client-java)
 [![CI](https://github.com/callbk/finlight-client-java/actions/workflows/test.yml/badge.svg)](https://github.com/callbk/finlight-client-java/actions/workflows/test.yml)
 
-The official JVM client for the [finlight.me](https://finlight.me) API — financial news with sentiment analysis, entity recognition, and real-time streaming. Written in Java 17, designed for first-class Kotlin interop (JSpecify null-marked API, immutable records, builders).
+[finlight.me](https://finlight.me) API 的官方 JVM 客户端 —— 提供带情感分析、实体识别和实时流式推送的财经新闻。使用 Java 17 编写，并针对 Kotlin 互操作做了一流设计（JSpecify null-marked API、不可变 record、builder）。
 
-📚 **Full API documentation: [docs.finlight.me](https://docs.finlight.me)**
+📚 **完整 API 文档：[docs.finlight.me](https://docs.finlight.me)**
 
-## Features
+## 功能特性
 
-- **REST API**: search articles, fetch single articles by link, list sources
-- **Real-time streaming**: enhanced and raw article streams over WebSocket
-- **Resilient by default**: request retries with exponential backoff; WebSocket auto-reconnect, keepalive with pong watchdog, proactive connection rotation, and rate-limit handling
-- **Webhook support**: HMAC-SHA256 signature verification with replay protection
-- **Minimal dependencies**: Jackson for JSON, SLF4J for logging (bring your own binding), JDK built-in HTTP/WebSocket client
+- **REST API**：检索文章、按链接获取单篇文章、列出新闻源
+- **实时流式推送**：通过 WebSocket 提供 enhanced 和 raw 两种文章流
+- **默认具备韧性**：请求失败按指数退避重试；WebSocket 自动重连、带 pong 看门狗的保活、主动连接轮换，以及速率限制处理
+- **支持 Webhook**：HMAC-SHA256 签名验证，含重放防护
+- **依赖极少**：JSON 使用 Jackson，日志使用 SLF4J（自行提供 binding），HTTP/WebSocket 使用 JDK 内置客户端
 
-Requires Java 17+.
+需要 Java 17 及以上版本。
 
-## Installation
+## 安装
 
-Gradle (Kotlin DSL):
+Gradle（Kotlin DSL）：
 
 ```kotlin
 dependencies {
@@ -30,7 +30,7 @@ dependencies {
 }
 ```
 
-Maven:
+Maven：
 
 ```xml
 <dependency>
@@ -40,7 +40,7 @@ Maven:
 </dependency>
 ```
 
-Alternatively via [JitPack](https://jitpack.io/#callbk/finlight-client-java), built straight from the GitHub tag:
+也可以通过 [JitPack](https://jitpack.io/#callbk/finlight-client-java) 直接从 GitHub tag 构建：
 
 ```kotlin
 repositories {
@@ -52,7 +52,7 @@ dependencies {
 }
 ```
 
-## Quick Start
+## 快速开始
 
 ### Java
 
@@ -93,9 +93,9 @@ response.articles().forEach { println("[${it.source()}] ${it.title()}") }
 
 ## REST API
 
-### Search articles
+### 检索文章
 
-See the [query language reference](https://docs.finlight.me) for the full `query` syntax.
+完整的 `query` 语法参见[查询语言参考](https://docs.finlight.me)。
 
 ```java
 ArticleResponse response = client.articles().fetchArticles(
@@ -111,7 +111,7 @@ ArticleResponse response = client.articles().fetchArticles(
         .build());
 ```
 
-### Fetch a single article by link
+### 按链接获取单篇文章
 
 ```java
 Article article = client.articles().fetchArticleByLink(
@@ -120,15 +120,15 @@ Article article = client.articles().fetchArticleByLink(
         .build());
 ```
 
-### List sources
+### 列出新闻源
 
 ```java
 List<Source> sources = client.sources().getSources();
 ```
 
-## Real-time streaming
+## 实时流式推送
 
-`connect` blocks and reconnects automatically until you call `stop()`; use `connectAsync` to run it on a background thread. The enhanced stream delivers articles with sentiment and entities; the raw stream (`client.rawWebSocket()`) delivers unenriched articles with minimal latency.
+`connect` 会阻塞并自动重连，直到你调用 `stop()`；使用 `connectAsync` 可将其运行在后台线程中。enhanced 流推送带情感和实体的文章；raw 流（`client.rawWebSocket()`）以最低延迟推送未经增强的文章。
 
 ```java
 FinlightClient client = FinlightClient.create(apiKey);
@@ -141,28 +141,28 @@ client.webSocket().connect(
     article -> System.out.println(article.title()));
 ```
 
-Custom stream options:
+自定义流选项：
 
 ```java
 FinlightClient client = FinlightClient.create(
     FinlightConfig.of(apiKey),
     WebSocketOptions.builder()
-        .takeover(true) // take over an existing connection for the same key
+        .takeover(true) // 接管同一密钥下已有的连接
         .onClose((code, reason) -> System.out.println("closed: " + code))
         .build());
 ```
 
-If the server permanently rejects the connection (close code 1008), `connect` throws `FinlightBlockedException` — reconnecting will not help; contact support.
+若服务端永久拒绝该连接（关闭码 1008），`connect` 会抛出 `FinlightBlockedException` —— 此时重连无济于事，请联系支持。
 
-## Webhooks
+## Webhook
 
-Verify incoming webhooks with the raw (unparsed) request body:
+使用原始（未解析的）请求体验证收到的 Webhook：
 
 ```java
 import me.finlight.client.WebhookService;
 import me.finlight.client.WebhookVerificationException;
 
-// e.g. in a Spring controller
+// 例如在 Spring controller 中
 @PostMapping("/webhook")
 public ResponseEntity<Void> onWebhook(
     @RequestBody String rawBody,
@@ -178,15 +178,15 @@ public ResponseEntity<Void> onWebhook(
 }
 ```
 
-## Configuration
+## 配置
 
-| Option       | Default                   | Description                                     |
+| 选项         | 默认值                    | 说明                                            |
 | ------------ | ------------------------- | ----------------------------------------------- |
-| `baseUrl`    | `https://api.finlight.me` | REST endpoint                                   |
-| `wssUrl`     | `wss://wss.finlight.me`   | WebSocket endpoint                              |
-| `timeout`    | 5s                        | Per-request and connect timeout                 |
-| `retryCount` | 3                         | Total attempts for retryable failures (429/5xx) |
-| `httpClient` | built-in                  | Custom `java.net.http.HttpClient` (e.g. proxy)  |
+| `baseUrl`    | `https://api.finlight.me` | REST 接口地址                                   |
+| `wssUrl`     | `wss://wss.finlight.me`   | WebSocket 接口地址                              |
+| `timeout`    | 5s                        | 单次请求和连接超时                              |
+| `retryCount` | 3                         | 可重试失败（429/5xx）的总尝试次数               |
+| `httpClient` | 内置                      | 自定义 `java.net.http.HttpClient`（例如走代理） |
 
 ```java
 FinlightClient client = FinlightClient.create(
@@ -196,32 +196,36 @@ FinlightClient client = FinlightClient.create(
         .build());
 ```
 
-Logging goes through [SLF4J](https://www.slf4j.org/); add a binding (Logback, `slf4j-simple`, …) to see client logs, e.g. under the `me.finlight.client` logger namespace.
+日志通过 [SLF4J](https://www.slf4j.org/) 输出；添加一个 binding（Logback、`slf4j-simple` 等）即可看到客户端日志，logger 命名空间为 `me.finlight.client`。
 
-## Development
+## 开发
 
 ```bash
-./gradlew build           # compile, lint (Spotless + Error Prone), test
-./gradlew spotlessApply   # fix formatting
+./gradlew build           # 编译、静态检查（Spotless + Error Prone）、测试
+./gradlew spotlessApply   # 修复代码格式
 ```
 
-### Verification against the real API
+### 针对真实 API 的验证
 
-The `local/` directory is gitignored and holds smoke/soak runners, mirroring the Go and .NET clients — keep credentials in the environment, never in code.
+`local/` 目录已被 gitignore，用于存放冒烟和长跑测试脚本，与 Go 和 .NET 客户端保持一致 —— 凭据请放在环境变量中，切勿写入代码。
 
 ```bash
-# One-shot smoke: REST endpoints + 30s article stream
+# 一次性冒烟测试：REST 接口 + 30 秒文章流
 FINLIGHT_API_KEY=sk_... ./gradlew -q smoke
 
-# Long-running stream stability (default 10 minutes)
+# 长时间流稳定性测试（默认 10 分钟）
 FINLIGHT_API_KEY=sk_... SOAK_MINUTES=60 ./gradlew -q soak
 
-# REST integration tests (auto-skipped when the key is not set)
+# REST 集成测试（未设置密钥时自动跳过）
 FINLIGHT_API_KEY=sk_... ./gradlew test --tests '*IntegrationSmokeTest'
 ```
 
-Optional: `FINLIGHT_BASE_URL` / `FINLIGHT_WSS_URL` to target dev.
+可选：使用 `FINLIGHT_BASE_URL` / `FINLIGHT_WSS_URL` 指向 dev 环境。
 
-## License
+## 许可证
 
 [MIT](LICENSE)
+
+## 相关资源
+
+- 中文产品页：https://finlight.me/zh/news-api
