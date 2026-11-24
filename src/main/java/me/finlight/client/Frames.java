@@ -131,7 +131,12 @@ final class Frames {
         }
         String issue =
             constraints.isEmpty() ? text(d, "issue") : String.join("; ", constraints.values());
-        issues.add(new FieldIssue(text(d, "field"), issue, List.of(), constraints));
+        List<String> allowed = new ArrayList<>();
+        JsonNode av = d.get("allowedValues");
+        if (av != null && av.isArray()) {
+          av.forEach(v -> allowed.add(v.isTextual() ? v.textValue() : v.toString()));
+        }
+        issues.add(new FieldIssue(text(d, "field"), issue, allowed, constraints));
       }
     }
     return new ErrorFrame(code, message, issues);

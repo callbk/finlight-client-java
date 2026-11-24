@@ -101,6 +101,8 @@ Kotlin에서는 `onEvent`에 람다를 넘길 수 있습니다: `client.stream(p
 
 - `client.rawStream(RawStreamParams, listener)`는 보강 전 기사를 전달합니다(`<wssUrl>/raw`). `include`, content, sentiment,
   companies, events가 없고 `availableAt`은 항상 null입니다.
+- `sourceTypes`와 `excludeSourceTypes`는 검색과 마찬가지로 두 스트림 모두에서 동작합니다. 설정한 경우에만 SDK가 보냅니다.
+  서버가 모르는 값은 `ValidationFailedException`으로 스트림을 끝냅니다(필드 `sourceTypes`, 허용 값은 `errors()`에 있음).
 - 리스너 메서드는 스트림의 데몬 스레드 하나에서 순서대로 실행됩니다. 느린 리스너가 keep-alive를 오작동시키지 않으며, 리스너의 예외는
   기록되고 스트림은 계속됩니다. `close()` 후에는 이벤트가 오지 않고 마지막으로 `onClosed`가 호출됩니다. `stream.awaitTermination()`은
   끝날 때까지 블록합니다.

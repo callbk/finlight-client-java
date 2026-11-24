@@ -94,6 +94,8 @@ class RulesScopeAndNamesTest {
             .sources("a")
             .excludeSources("b")
             .optInSources("c")
+            .sourceTypes(SourceType.NEWSWIRE)
+            .excludeSourceTypes("blog")
             .language("en")
             .tickers("X")
             .countries("US")
@@ -107,6 +109,8 @@ class RulesScopeAndNamesTest {
             .query("q")
             .sources("a")
             .excludeSources("b")
+            .sourceTypes("newswire")
+            .excludeSourceTypes(SourceType.BLOG)
             .language("en")
             .includeUpdates(true)
             .build();

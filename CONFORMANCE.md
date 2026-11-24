@@ -116,3 +116,4 @@ Check the kit against its MANIFEST with `./gradlew checkConformance`; update it 
 | S-26 | Dial refused: server error | `ws-sessions/dial-server-error.json` | `ConformanceSessionTest` > `S-26 ...` |
 | S-27 | connection.preempted, reason quota_exceeded, with quotaReconnect turned off | `ws-sessions/preempted-quota-exceeded-no-reconnect.json` | `ConformanceSessionTest` > `S-27 ...` |
 | S-28 | Dial refused: WebSocket quota exhausted, with quotaReconnect turned off | `ws-sessions/dial-quota-exceeded-no-reconnect.json` | `ConformanceSessionTest` > `S-28 ...` |
+| S-29 | VALIDATION_FAILED for an unknown sourceTypes value | `ws-sessions/validation-failed-source-type.json` | `ConformanceSessionTest` > `S-29 ...` |

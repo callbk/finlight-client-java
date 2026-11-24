@@ -182,6 +182,7 @@ StreamParams params = StreamParams.builder()
     .query("ticker:NVDA")
     .language("en")
     .include(IncludeBlock.COMPANIES, IncludeBlock.EVENTS)
+    .sourceTypes(SourceType.NEWSWIRE, SourceType.PRESS_RELEASE)
     .includeUpdates(true)
     .build();
 FinlightStream stream = client.stream(params, new StreamListener() {
@@ -204,6 +205,9 @@ Kotlin can pass a lambda for `onEvent`: `client.stream(params) { e -> println(e.
 
 - `client.rawStream(RawStreamParams, listener)` delivers articles before enrichment (at
   `<wssUrl>/raw`): no `include`, no content, sentiment, companies or events, `availableAt` always null.
+- `sourceTypes` and `excludeSourceTypes` work on both streams as in search. The SDK sends them only
+  when you set them. A value the server does not know ends the stream with
+  `ValidationFailedException` (field `sourceTypes`, with the allowed values in `errors()`).
 - Listener methods run on one daemon thread of the stream, in order. A slow listener does not trip
   the keep-alive; an exception in it is logged and the stream goes on. After `close()` no more events
   arrive; `onClosed` runs last. `stream.awaitTermination()` blocks until the end.

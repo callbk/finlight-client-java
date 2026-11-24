@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Stream;
@@ -15,12 +16,12 @@ import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.TestFactory;
 import org.junit.jupiter.api.function.Executable;
 
-/** Kit cases S-01 to S-28 and R-13, R-14, against the in-process WebSocket server. */
+/** Kit cases S-01 to S-29 and R-13, R-14, against the in-process WebSocket server. */
 class ConformanceSessionTest {
   static final Map<String, Executable> CASES = new LinkedHashMap<>();
 
   static {
-    for (int i = 1; i <= 28; i++) {
+    for (int i = 1; i <= 29; i++) {
       String id = String.format(java.util.Locale.ROOT, "S-%02d", i);
       CASES.put(id, () -> session(id));
     }
@@ -61,11 +62,43 @@ class ConformanceSessionTest {
             "rawStream has no include: rejected before dialing, at compile time");
       }
       case "S-14" -> runner.after(ConformanceSessionTest::searchFailedSurfaces);
+      case "S-29" -> {
+        unknownSourceTypeGoesToTheServer(f);
+        runner.after(ConformanceSessionTest::allowedValuesFromDetails);
+      }
       case "S-16" -> runner.autoPong(false);
       default -> {}
     }
     org.junit.jupiter.api.Assertions.assertTimeoutPreemptively(
         java.time.Duration.ofSeconds(60), runner::run);
+  }
+
+  /**
+   * S-29: SourceType is an open vocabulary, so the SDK sends an unknown value as it is and the
+   * server's VALIDATION_FAILED ends the stream (checked by the session run).
+   */
+  private static void unknownSourceTypeGoesToTheServer(JsonNode f) {
+    for (JsonNode s : f.get("steps")) {
+      if ("clientSends".equals(s.get("step").asText())) {
+        com.fasterxml.jackson.databind.node.ObjectNode args = s.get("frame").deepCopy();
+        args.remove(List.of("payloadVersion", "clientNonce"));
+        assertEquals(args, SdkCalls.stream(args).toJson(), "the builder keeps the unknown value");
+        assertFalse(SourceType.of("wire").isKnown());
+        return;
+      }
+    }
+    throw new AssertionError("S-29 has no subscribe frame");
+  }
+
+  /** S-29: the details[] entry reaches errors() with field and allowedValues. */
+  private static void allowedValuesFromDetails(SessionRunner.Ctx ctx) {
+    FinlightException t = ctx.probe.terminal;
+    ValidationFailedException v =
+        org.junit.jupiter.api.Assertions.assertInstanceOf(ValidationFailedException.class, t);
+    assertEquals(1, v.errors().size());
+    FieldIssue issue = v.errors().get(0);
+    assertEquals("sourceTypes", issue.field());
+    assertEquals(SourceTypeValues.ALL, issue.allowedValues());
   }
 
   /** S-02 (R-WS-3): the raw dial bytes carry lowercase header names and no key in the URL. */

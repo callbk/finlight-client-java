@@ -99,6 +99,8 @@ Kotlin 可以为 `onEvent` 传入 lambda：`client.stream(params) { e -> println
 
 - `client.rawStream(RawStreamParams, listener)` 推送未经增强的文章（`<wssUrl>/raw`）：没有 `include`、content、
   sentiment、companies 或 events，`availableAt` 始终为 null。
+- `sourceTypes` 和 `excludeSourceTypes` 在两种流上的作用与搜索相同。只有在你设置时 SDK 才会发送。
+  服务器不认识的值会以 `ValidationFailedException` 结束流（字段 `sourceTypes`，允许的值在 `errors()` 中）。
 - 监听器方法按顺序在流的一个守护线程上运行。慢速监听器不会触发保活超时；其中的异常会被记录，流继续运行。
   `close()` 之后不再收到事件；最后调用 `onClosed`。`stream.awaitTermination()` 会阻塞到结束。
 - 流每 25 秒发送 ping，60 秒内无 pong 则替换连接，115 分钟后更新连接，每次重连后发送相同的订阅。重复项会被丢弃；

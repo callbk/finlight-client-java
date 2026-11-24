@@ -177,6 +177,7 @@ StreamParams params = StreamParams.builder()
     .query("ticker:NVDA")
     .language("en")
     .include(IncludeBlock.COMPANIES, IncludeBlock.EVENTS)
+    .sourceTypes(SourceType.NEWSWIRE, SourceType.PRESS_RELEASE)
     .includeUpdates(true)
     .build();
 FinlightStream stream = client.stream(params, new StreamListener() {
@@ -199,6 +200,8 @@ Kotlin では `onEvent` にラムダを渡せます：`client.stream(params) { e
 
 - `client.rawStream(RawStreamParams, listener)` はエンリッチ前の記事を配信します（`<wssUrl>/raw`）。`include`、content、
   sentiment、companies、events はなく、`availableAt` は常に null です。
+- `sourceTypes` と `excludeSourceTypes` は検索と同じく両方のストリームで使えます。設定したときだけ SDK が送信します。
+  サーバーが知らない値はストリームを `ValidationFailedException` で終了させます（フィールド `sourceTypes`、許可される値は `errors()` にあります）。
 - リスナーのメソッドはストリームの 1 つのデーモンスレッドで順番に実行されます。遅いリスナーがキープアライブを誤検知させることはなく、
   例外は記録されてストリームは継続します。`close()` の後はイベントが届かず、最後に `onClosed` が呼ばれます。
   `stream.awaitTermination()` は終了までブロックします。

@@ -88,6 +88,55 @@ public final class RawStreamParams {
       return excludeSources(values == null ? null : Arrays.asList(values));
     }
 
+    /**
+     * Keep only articles of sources of these types. Articles of unclassified sources never match.
+     * Filters inside the source pool and never adds a source to it.
+     */
+    public Builder sourceTypes(@Nullable List<String> values) {
+      Params.set(
+          this.values,
+          "sourceTypes",
+          values == null ? null : Params.strings("sourceTypes", values));
+      return this;
+    }
+
+    /**
+     * Keep only articles of sources of these types. Articles of unclassified sources never match.
+     * Filters inside the source pool and never adds a source to it.
+     */
+    public Builder sourceTypes(String @Nullable ... values) {
+      return sourceTypes(values == null ? null : Arrays.asList(values));
+    }
+
+    /**
+     * Keep only articles of sources of these types. Articles of unclassified sources never match.
+     * Filters inside the source pool and never adds a source to it.
+     */
+    public Builder sourceTypes(SourceType... values) {
+      Params.set(this.values, "sourceTypes", Params.strings("sourceTypes", values));
+      return this;
+    }
+
+    /** Leave out articles of sources of these types. Unclassified sources are kept. */
+    public Builder excludeSourceTypes(@Nullable List<String> values) {
+      Params.set(
+          this.values,
+          "excludeSourceTypes",
+          values == null ? null : Params.strings("excludeSourceTypes", values));
+      return this;
+    }
+
+    /** Leave out articles of sources of these types. Unclassified sources are kept. */
+    public Builder excludeSourceTypes(String @Nullable ... values) {
+      return excludeSourceTypes(values == null ? null : Arrays.asList(values));
+    }
+
+    /** Leave out articles of sources of these types. Unclassified sources are kept. */
+    public Builder excludeSourceTypes(SourceType... values) {
+      Params.set(this.values, "excludeSourceTypes", Params.strings("excludeSourceTypes", values));
+      return this;
+    }
+
     /** One ISO 639-1 language. Server default {@code en}. */
     public Builder language(@Nullable String value) {
       Params.set(values, "language", value);

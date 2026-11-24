@@ -31,6 +31,46 @@ class RulesRequestTest {
   }
 
   @Test
+  void streamSourceTypesAreArraysOnlyWhenSet() {
+    assertEquals("{}", Json.write(StreamParams.builder().build().toJson()));
+    assertEquals("{}", Json.write(RawStreamParams.builder().build().toJson()));
+    String expected =
+        "{\"sourceTypes\":[\"newswire\",\"financial_media\"],\"excludeSourceTypes\":[\"blog\"]}";
+    StreamParams s =
+        StreamParams.builder()
+            .sourceTypes(SourceType.NEWSWIRE, SourceType.FINANCIAL_MEDIA)
+            .excludeSourceTypes(SourceType.BLOG)
+            .build();
+    assertEquals(expected, Json.write(s.toJson()));
+    assertEquals(
+        s,
+        StreamParams.builder()
+            .sourceTypes(List.of("newswire", "financial_media"))
+            .excludeSourceTypes("blog")
+            .build());
+    RawStreamParams r =
+        RawStreamParams.builder()
+            .sourceTypes("newswire", "financial_media")
+            .excludeSourceTypes(SourceType.BLOG)
+            .build();
+    assertEquals(expected, Json.write(r.toJson()));
+    assertEquals(
+        "{}",
+        Json.write(
+            r.toBuilder()
+                .sourceTypes((List<String>) null)
+                .excludeSourceTypes((List<String>) null)
+                .build()
+                .toJson()));
+    assertThrows(
+        FinlightValidationException.class,
+        () -> StreamParams.builder().sourceTypes(SourceType.NEWSWIRE, null));
+    assertThrows(
+        FinlightValidationException.class,
+        () -> RawStreamParams.builder().excludeSourceTypes(Collections.singletonList(null)));
+  }
+
+  @Test
   void unsettingAKeyRemovesIt() {
     SearchParams p = SearchParams.builder().query("x").limit(5).languages("en").build();
     SearchParams q = p.toBuilder().query(null).limit(null).languages((List<String>) null).build();

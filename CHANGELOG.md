@@ -40,6 +40,9 @@ section of the README and the full guide on [docs.finlight.me](https://docs.finl
 - Search filters `sourceTypes` and `excludeSourceTypes` (strings or `SourceType`). `SourceType` knows
   `newswire`, `press_release`, `financial_media`, `general_media`, `aggregator`, `blog` and `government`;
   `source().type()` and `Source.type()` are null for an unclassified source.
+- The same `sourceTypes` and `excludeSourceTypes` on `StreamParams` and `RawStreamParams`. They are
+  sent as arrays only when set. A rejected value ends the stream with `ValidationFailedException`;
+  WebSocket errors now keep `allowedValues` in `errors()`, as REST errors do.
 - One error model: `FinlightApiException` with `status`, `code`, `type`, `title`, `detail`,
   `requestId`, `errors`, `apiKind`, `raw` and one subclass per code (`NotFoundException`,
   `RateLimitedException` with `limitType` and `retryAfter`, ...), plus `FinlightValidationException`,
@@ -71,4 +74,4 @@ section of the README and the full guide on [docs.finlight.me](https://docs.finl
 ### Contract
 
 - Built and tested against the finlight API v3 contract kit 3.0.0-rc.4, vendored in `conformance/`
-  (not published). Every kit case runs as its own test (`CONFORMANCE.md`).
+  (not published), 106 cases. Every kit case runs as its own test (`CONFORMANCE.md`).
