@@ -284,6 +284,121 @@ class RulesStreamTest {
     }
   }
 
+  /**
+   * A quota refusal of the rotation dial with quota reconnect on does not end the stream either:
+   * close the old connection, dial again at once, no quota wait. With quota reconnect off it ends.
+   */
+  @Test
+  void rotationRefusedForQuotaRedialsAtOnce() throws Exception {
+    String quota = "{\"message\":\"WebSocket quota exceeded for the current period\"}";
+    try (WsServer ws = new WsServer()) {
+      StreamProbe p = start(ws, false, StreamParams.builder().build().toJson(), b -> {});
+      WsServer.Conn c1 = ws.nextDial("dial").conn();
+      c1.nextSubscribe();
+      c1.send(ADMITTED);
+      StreamProbe.waitFor(() -> p.admitted.size() == 1, "admitted");
+      ws.script.add(new WsServer.Refusal(403, quota));
+      p.advance(115 * 60 * 1000);
+      assertNull(ws.nextDial("refused rotation dial").conn());
+      WsServer.Conn c2 = null;
+      while (c2 == null) {
+        c2 = ws.nextDial("redial").conn();
+      }
+      assertFalse(c1.open, "the old connection was closed before the redial");
+      c2.nextSubscribe();
+      c2.send(ADMITTED);
+      StreamProbe.waitFor(() -> p.reconnects.size() == 1, "onReconnect");
+      assertEquals(ReconnectReason.ROTATION, p.reconnects.get(0).reason());
+      p.settle();
+      assertTrue(p.quotaWaits.isEmpty(), "no quota wait: " + p.quotaWaits);
+      assertTrue(p.errors.isEmpty(), "no onError: " + p.errors);
+      p.stop();
+    }
+    try (WsServer ws = new WsServer()) {
+      StreamProbe p =
+          start(ws, false, StreamParams.builder().build().toJson(), b -> b.quotaReconnect(false));
+      WsServer.Conn c1 = ws.nextDial("dial").conn();
+      c1.nextSubscribe();
+      c1.send(ADMITTED);
+      StreamProbe.waitFor(() -> p.admitted.size() == 1, "admitted");
+      ws.script.add(new WsServer.Refusal(403, quota));
+      p.advance(115 * 60 * 1000);
+      StreamProbe.waitFor(() -> p.done, "the end");
+      assertInstanceOf(ForbiddenException.class, p.terminal);
+      p.stop();
+    }
+  }
+
+  /**
+   * R-WS-2: connection.admitted comes before the subscribe is checked, so admitted followed by
+   * SEARCH_FAILED keeps growing the backoff. Only an article or a pong starts it over.
+   */
+  @Test
+  void onlyAnArticleOrAPongResetsTheBackoff() throws Exception {
+    String searchFailed =
+        "{\"event\":\"connection.error\",\"payloadVersion\":3,\"data\":{\"code\":\"SEARCH_FAILED\","
+            + "\"message\":\"x\"}}";
+    String pong =
+        "{\"event\":\"connection.pong\",\"payloadVersion\":3,\"data\":{\"t\":1,\"serverNow\":1}}";
+    try (WsServer ws = new WsServer()) {
+      ws.autoPong = false; // a pong resets the backoff
+      StreamProbe p =
+          start(
+              ws,
+              false,
+              StreamParams.builder().build().toJson(),
+              b -> b.searchFailedThreshold(100));
+      WsServer.Conn[] c = {ws.nextDial("dial").conn()};
+      c[0].nextSubscribe();
+      for (int i = 0; i < 5; i++) {
+        c[0].send(ADMITTED);
+        c[0].send(searchFailed);
+        int n = i + 1;
+        StreamProbe.waitFor(() -> p.scheduled.size() == n, "reconnect " + n);
+        long low = Math.min(1000L << i, 30_000) / 2;
+        long d = p.scheduled.get(i).delayMs();
+        assertTrue(d >= low, "failure " + n + ": delay " + d + " ms, want at least " + low);
+        c[0] = redialAfterTheWait(ws, p);
+      }
+      // An article starts the backoff over.
+      c[0].send(ADMITTED);
+      c[0].send(frame("article.created", article("A", null, "2026-11-23T10:00:00.000Z")));
+      StreamProbe.waitFor(() -> p.items.size() == 1, "the article");
+      c[0].close(1000);
+      StreamProbe.waitFor(() -> p.scheduled.size() == 6, "reconnect after the article");
+      assertTrue(p.scheduled.get(5).delayMs() <= 1000, "after an article: " + p.scheduled.get(5));
+      // Two more failures, then a pong starts it over.
+      for (int i = 0; i < 2; i++) {
+        c[0] = redialAfterTheWait(ws, p);
+        c[0].send(ADMITTED);
+        c[0].send(searchFailed);
+        int n = 7 + i;
+        StreamProbe.waitFor(() -> p.scheduled.size() == n, "reconnect " + n);
+      }
+      c[0] = redialAfterTheWait(ws, p);
+      c[0].send(ADMITTED);
+      c[0].send(pong);
+      StreamProbe.waitFor(() -> p.pongs.get() == 1, "the pong");
+      c[0].close(1000);
+      StreamProbe.waitFor(() -> p.scheduled.size() == 9, "reconnect after the pong");
+      assertTrue(p.scheduled.get(8).delayMs() <= 1000, "after a pong: " + p.scheduled.get(8));
+      p.stop();
+    }
+  }
+
+  /** Advances to the last scheduled reconnect and returns the next accepted, subscribed conn. */
+  private static WsServer.Conn redialAfterTheWait(WsServer ws, StreamProbe p)
+      throws InterruptedException {
+    StreamProbe.Scheduled s = p.scheduled.get(p.scheduled.size() - 1);
+    p.advance(s.dueAt() - p.clock.millis());
+    WsServer.Conn next = null;
+    while (next == null) {
+      next = ws.nextDial("redial").conn();
+    }
+    next.nextSubscribe();
+    return next;
+  }
+
   /** JVM-2: an Error thrown by a listener (Kotlin TODO(), AssertionError) does not stop events. */
   @Test
   void listenerErrorsDoNotKillDelivery() throws Exception {

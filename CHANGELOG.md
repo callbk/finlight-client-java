@@ -48,6 +48,11 @@ section of the README and the full guide on [docs.finlight.me](https://docs.finl
   One `X-Request-Id` per call, kept on retries. Interrupting the thread cancels a call at once.
 - Streams: application ping every 25 s, a 60 s pong watchdog, connection renewal after 115 min,
   duplicate filter, hooks `onAdmitted`, `onReconnect` (with `lastSeenAt`), `onError`, `onQuotaWait`.
+  The reconnect backoff grows until a connection delivers an article or a pong; `connection.admitted`
+  does not reset it. The renewal opens the new connection before it closes the old one. When that
+  dial is refused or fails (for example at a connection limit of 1), the old connection is closed,
+  its close awaited, and the stream dials again at once, without `onError`. Only a refusal of that
+  second dial is reported and waits. Refusals that end a stream still end it.
 - Streams survive a used-up WebSocket quota: after a dial refused with "quota exceeded" or a
   `quota_exceeded` preemption they retry every hour until the quota allows it, reporting each wait
   to `onQuotaWait`. On by default; `quotaReconnect(false)` ends the stream with the error instead.

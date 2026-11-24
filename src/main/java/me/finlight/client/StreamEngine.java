@@ -338,13 +338,12 @@ final class StreamEngine {
       Planned planned = classifyDialFailure(err);
       Conn old = rotatingFrom;
       rotatingFrom = null;
-      if (old != null
-          && !old.dropped
-          && planned.terminal() == null
-          && !ReconnectReason.QUOTA_EXCEEDED.equals(planned.reason())) {
+      if (old != null && !old.dropped && planned.terminal() == null) {
         // The rotation dial failed while the old connection still works. Typically the plan's
         // connection limit is in use (by this very connection): close it, wait for its close and
-        // dial again at once. Not an error for the user and no long wait.
+        // dial again at once. Not an error for the user and no long wait. Only refusals that end
+        // the stream (401, no WebSockets, quota with quota reconnect off) end it here too.
+        pendingQuotaError = null;
         Log.debug(
             () ->
                 name
@@ -546,11 +545,13 @@ final class StreamEngine {
 
   private void handle(Conn c, Frames.Frame frame, JsonNode json) {
     if (frame instanceof Frames.Pong) {
+      // Only a pong or an article proves the connection healthy and restarts the backoff.
+      failures = 0;
       c.lastPong = now();
       armWatchdog(c);
       hooks.onPong();
     } else if (frame instanceof Frames.Admitted a) {
-      failures = 0;
+      // Admitted comes before the subscribe is checked and searched: it does not reset the backoff.
       quotaWaits = 0;
       if (c == current && rotatingFrom != null) {
         Conn old = rotatingFrom;
@@ -622,6 +623,7 @@ final class StreamEngine {
 
   private void handleArticle(Frames.ArticleFrame f, JsonNode json) {
     searchFailed = 0;
+    failures = 0;
     Article article;
     try {
       article = Article.read(f.data(), "data");
