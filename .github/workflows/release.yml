@@ -31,6 +31,22 @@ jobs:
             echo "tag ${GITHUB_REF_NAME} does not match version=${VERSION} in gradle.properties" >&2
             exit 1
           fi
+      - name: Release notes from the changelog section of this version
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          awk -v v="$VERSION" '
+            /^## / { if (found) exit; if ($2 == v) { found = 1; heading = $0 } }
+            found { print }
+          ' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
+          heading="$(head -n 1 "$RUNNER_TEMP/notes.md")"
+          if [ -z "$heading" ]; then
+            echo "CHANGELOG.md has no section '## ${VERSION}'" >&2
+            exit 1
+          fi
+          if echo "$heading" | grep -qi unreleased; then
+            echo "CHANGELOG.md still says '${heading}'; set the release date before tagging" >&2
+            exit 1
+          fi
       - name: Build and test from an empty output directory
         run: ./gradlew clean build checkPackage
       - name: Publish to Maven Central
@@ -47,4 +63,4 @@ jobs:
       - name: GitHub release with the changelog
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${GITHUB_REF_NAME}" --title "${GITHUB_REF_NAME}" --notes-file CHANGELOG.md
+        run: gh release create "${GITHUB_REF_NAME}" --title "${GITHUB_REF_NAME}" --notes-file "$RUNNER_TEMP/notes.md"

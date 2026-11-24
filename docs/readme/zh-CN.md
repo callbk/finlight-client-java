@@ -21,7 +21,8 @@ TypeScript 4.x、Python 3.x、PHP 2.x、Go 模块 `/v2`、.NET 2.x、Java 1.x、
 ## 运行要求
 
 - Java 17 及以上（在 17 和 21 上测试）
-- Jackson `jackson-databind` 2.13 及以上（以 2.13.5 和 2.18.3 测试）
+- Jackson `jackson-databind` 2.13.5 及以上（以 2.13.5 和 2.18.3 测试）。发布的 POM 以 2.13.5 为下限，且不导入 Jackson BOM，
+  你的构建保留自己的 Jackson 版本。
 - JSpecify 1.0（仅注解）
 
 REST 与 WebSocket 使用 JDK 自带的 `java.net.http` 客户端，没有其他运行时依赖。
@@ -145,8 +146,10 @@ finlight 会对每个 Webhook 签名。请在任何框架解析之前，用**原
 - 5xx、网络错误和单次尝试超时最多重试 3 次，等待时间递增并带随机抖动，POST 搜索也包括在内。
 - 400、401、403 和 404 从不重试。当月 429 会立即失败，`searchAll` 中也是如此：REST 从不等待新的配额周期（只有流会等待）。
 - 突发 429 会精确等待 `Retry-After`（没有该头时为 10 秒）后再试一次。默认开启，不计入 `maxRetries`；
-  `retryOnBurst(false)` 会立即抛出。
+  `retryOnBurst(RetryOnBurst.OFF)` 会立即抛出。
 - 每次调用发送自己的 `X-Request-Id`，重试时保持不变；`requestId()` 携带该值。
+- JDK 的 `HttpClient` 在无法建立连接或连接池中的连接已关闭时，会自行重发 GET。这种重发保留 `X-Request-Id`，不计入
+  `maxRetries`。`-Djdk.httpclient.disableRetryConnect=true` 可关闭连接失败后的重发（对整个 JVM 生效）；连接池连接已关闭时的重发无法关闭。
 - 中断调用线程即可取消调用：等待立即结束，不再重试，调用抛出 `java.util.concurrent.CancellationException`，并恢复中断标志。
 
 ## 配置
@@ -156,7 +159,7 @@ finlight 会对每个 Webhook 签名。请在任何框架解析之前，用**原
 <<TABLE 3>>
 
 `httpClient(java.net.http.HttpClient)` 将你的客户端用于 REST 和 WebSocket（代理、TLS、执行器）。其连接超时和代理设置生效；
-SDK 从不关闭它。不要再包一层自己的重试：每次尝试都消耗配额。`client.close()` 会结束该客户端的所有流，并关闭 SDK 自己创建的
+SDK 从不关闭它。不要再包一层自己的重试：每次尝试都消耗配额。JDK 自身的 GET 重发（见"错误与重试"）同样适用。`client.close()` 会结束该客户端的所有流，并关闭 SDK 自己创建的
 HTTP 客户端。
 
 ## 日志

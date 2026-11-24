@@ -13,6 +13,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
@@ -30,20 +31,29 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.jspecify.annotations.Nullable;
 
 /**
  * One stream: dial, subscribe, keep-alive, watchdog, rotation, reconnect policy (R-WS-2), dedupe
  * and delivery. All state changes run on one daemon thread (the loop); user code runs on a second
- * daemon thread fed by a bounded queue, so control frames are handled before user code and a slow
- * listener cannot trip the watchdog.
+ * daemon thread fed by a bounded queue, so control frames are handled before user code. The loop
+ * never waits for the listener: when the queue is full, listener calls are parked and the stream
+ * stops reading frames until the listener catches up, while pings and timers keep running.
  */
 final class StreamEngine {
   static final String NO_WEBSOCKETS = "Your subscription does not include WebSockets";
   static final String QUOTA = "WebSocket quota exceeded";
   static final String TOO_MANY = "Too many concurrent connections";
   private static final int QUEUE_CAPACITY = 1024;
+
+  /** How long a rotation waits for the old connection's close before it dials anyway. */
+  private static final long ROTATION_CLOSE_WAIT_MS = 2_500;
+
+  /** How long a terminal end waits for a stuck listener to take the parked events. */
+  private static final long FLUSH_WAIT_MS = 30_000;
+
   private static final AtomicInteger IDS = new AtomicInteger();
 
   /** Hooks for tests; every method has an empty default. */
@@ -72,15 +82,22 @@ final class StreamEngine {
     QUOTA
   }
 
-  /** What happens after a connection ends. */
+  /** What happens after a connection ends; {@code report} goes to onError unless dropped. */
   private record Planned(
-      @Nullable FinlightException terminal, @Nullable ReconnectReason reason, Delay delay) {
+      @Nullable FinlightException terminal,
+      @Nullable ReconnectReason reason,
+      Delay delay,
+      @Nullable FinlightException report) {
     static Planned end(FinlightException error) {
-      return new Planned(error, null, Delay.NOW);
+      return new Planned(error, null, Delay.NOW, null);
     }
 
     static Planned reconnect(ReconnectReason reason, Delay delay) {
-      return new Planned(null, reason, delay);
+      return new Planned(null, reason, delay, null);
+    }
+
+    Planned reporting(FinlightException error) {
+      return new Planned(terminal, reason, delay, error);
     }
   }
 
@@ -111,7 +128,14 @@ final class StreamEngine {
   private boolean ended;
   private final LinkedHashMap<String, Boolean> dedupe = new LinkedHashMap<>();
   private long lastSeenMs = Long.MIN_VALUE;
-  private volatile long lastBlockedEnd = Long.MIN_VALUE;
+  private long lastBlockedEnd = Long.MIN_VALUE;
+  private long blockedSince = Long.MIN_VALUE;
+
+  /** Listener calls waiting for room in the dispatcher queue, in order. */
+  private final ArrayDeque<Runnable> parked = new ArrayDeque<>();
+
+  /** Connections that stopped reading because listener calls are parked. */
+  private final List<Conn> paused = new ArrayList<>();
 
   private volatile boolean stopRequested;
   private volatile @Nullable String lastSeenAt;
@@ -154,7 +178,7 @@ final class StreamEngine {
     loop.setRemoveOnCancelPolicy(true);
     loop.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
     loop.setContinueExistingPeriodicTasksAfterShutdownPolicy(false);
-    this.dispatcher = new Dispatcher(name + "-events");
+    this.dispatcher = new Dispatcher(name + "-events", () -> post(this::drainParked));
     this.handle = new FinlightStream(this);
   }
 
@@ -313,9 +337,29 @@ final class StreamEngine {
       current = null;
       Planned planned = classifyDialFailure(err);
       Conn old = rotatingFrom;
+      rotatingFrom = null;
+      if (old != null
+          && !old.dropped
+          && planned.terminal() == null
+          && !ReconnectReason.QUOTA_EXCEEDED.equals(planned.reason())) {
+        // The rotation dial failed while the old connection still works. Typically the plan's
+        // connection limit is in use (by this very connection): close it, wait for its close and
+        // dial again at once. Not an error for the user and no long wait.
+        Log.debug(
+            () ->
+                name
+                    + ": the renewing dial failed ("
+                    + planned.reason()
+                    + "); closing the old connection first");
+        rotateAfterClose(old);
+        return;
+      }
       if (old != null) {
-        rotatingFrom = null;
         drop(old);
+      }
+      FinlightException toReport = planned.report();
+      if (toReport != null) {
+        report(toReport);
       }
       apply(planned);
       return;
@@ -326,7 +370,7 @@ final class StreamEngine {
       ReconnectInfo info =
           new ReconnectInfo(
               lastSeenAt, reason == null ? ReconnectReason.CLOSED : reason, connections);
-      dispatcher.offer(user(() -> listener.onReconnect(info)));
+      enqueue(user(() -> listener.onReconnect(info)));
     }
     ObjectNode subscribe = Json.object();
     subscribe.put("payloadVersion", FinlightClient.PAYLOAD_VERSION);
@@ -338,6 +382,33 @@ final class StreamEngine {
     c.cancelPing = schedule(cfg.pingInterval().toMillis(), () -> ping(c));
     c.cancelRotation = schedule(cfg.rotationInterval().toMillis(), () -> rotate(c));
     ws.request(1);
+  }
+
+  /**
+   * Break-before-make for a rotation that cannot dial a second connection: closes {@code old}, then
+   * dials with reason rotation once its close arrived (or after a short wait).
+   */
+  private void rotateAfterClose(Conn old) {
+    boolean[] done = {false};
+    Runnable[] fallback = {null};
+    Runnable redial =
+        () -> {
+          if (done[0]) {
+            return;
+          }
+          done[0] = true;
+          Runnable f = fallback[0];
+          if (f != null) {
+            f.run();
+          }
+          scheduleReconnect(ReconnectReason.ROTATION, Delay.NOW);
+        };
+    old.afterClose = redial;
+    drop(old);
+    if (!done[0]) {
+      fallback[0] = schedule(ROTATION_CLOSE_WAIT_MS, redial);
+      cancelReconnect = fallback[0];
+    }
   }
 
   private Planned classifyDialFailure(@Nullable Throwable err) {
@@ -358,8 +429,7 @@ final class StreamEngine {
                 "could not connect to the stream endpoint: "
                     + (cause == null ? "unknown" : cause.getClass().getSimpleName()),
                 cause);
-    report(e);
-    return Planned.reconnect(ReconnectReason.DIAL_FAILED, Delay.BACKOFF);
+    return Planned.reconnect(ReconnectReason.DIAL_FAILED, Delay.BACKOFF).reporting(e);
   }
 
   /** R-WS-2 for a refused dial. 403 bodies are compared by their start. */
@@ -390,29 +460,29 @@ final class StreamEngine {
         return quotaPlan(dialError(status, message, body, null));
       }
       if (text.startsWith(TOO_MANY)) {
-        report(
-            dialError(
-                status,
-                message,
-                body,
-                "The connection limit is shared by enriched, raw and older SDK streams; the SDK"
-                    + " retries after a long wait. Use StreamOptions.takeover(true) to replace your"
-                    + " stalest connection."));
-        return Planned.reconnect(ReconnectReason.CONNECTION_LIMIT, Delay.LONG);
+        return Planned.reconnect(ReconnectReason.CONNECTION_LIMIT, Delay.LONG)
+            .reporting(
+                dialError(
+                    status,
+                    message,
+                    body,
+                    "The connection limit is shared by enriched, raw and older SDK streams; the"
+                        + " SDK retries after a long wait. Use StreamOptions.takeover(true) to"
+                        + " replace your stalest connection."));
       }
-      report(dialError(status, message, body, null));
-      return Planned.reconnect(ReconnectReason.DIAL_REFUSED, Delay.LONG);
+      return Planned.reconnect(ReconnectReason.DIAL_REFUSED, Delay.LONG)
+          .reporting(dialError(status, message, body, null));
     }
     if (status == 429) {
-      report(dialError(status, message, body, null));
-      return Planned.reconnect(ReconnectReason.RATE_LIMITED, Delay.LONG);
+      return Planned.reconnect(ReconnectReason.RATE_LIMITED, Delay.LONG)
+          .reporting(dialError(status, message, body, null));
     }
     if (status >= 500) {
       Log.debug(() -> name + ": dial refused with " + status + ", retrying");
       return Planned.reconnect(ReconnectReason.DIAL_REFUSED, Delay.BACKOFF);
     }
-    report(dialError(status, message, body, null));
-    return Planned.reconnect(ReconnectReason.DIAL_REFUSED, Delay.BACKOFF);
+    return Planned.reconnect(ReconnectReason.DIAL_REFUSED, Delay.BACKOFF)
+        .reporting(dialError(status, message, body, null));
   }
 
   private static FinlightApiException dialError(
@@ -464,7 +534,12 @@ final class StreamEngine {
       hooks.onFrame();
       WebSocket ws = c.ws;
       if (ws != null && !c.dropped && !ended) {
-        ws.request(1);
+        if (parked.isEmpty()) {
+          ws.request(1);
+        } else if (!paused.contains(c)) {
+          // The listener is behind: read nothing more until it caught up (back-pressure).
+          paused.add(c);
+        }
       }
     }
   }
@@ -483,7 +558,7 @@ final class StreamEngine {
         drop(old);
       }
       AdmittedInfo info = new AdmittedInfo(a.leaseId(), a.serverNow(), a.clientNonce());
-      dispatcher.offer(user(() -> listener.onAdmitted(info)));
+      enqueue(user(() -> listener.onAdmitted(info)));
     } else if (frame instanceof Frames.Preempted p) {
       PreemptedException error = new PreemptedException(p.reason(), p.newLeaseId(), p.timestamp());
       if (p.reason().equals(PreemptReason.QUOTA_EXCEEDED)) {
@@ -501,7 +576,7 @@ final class StreamEngine {
     } else if (frame instanceof Frames.OtherFrame o) {
       Log.debug(() -> name + ": unknown event " + o.event());
       StreamEvent.Other item = new StreamEvent.Other(o.event(), Json.write(json));
-      deliver(user(() -> listener.onEvent(item)));
+      enqueue(user(() -> listener.onEvent(item)));
     } else if (frame instanceof Frames.Ignored i) {
       Log.debug(() -> name + ": ignored a frame (" + i.reason() + ")");
     }
@@ -585,7 +660,7 @@ final class StreamEngine {
         f.kind() == StreamEventKind.CREATED
             ? new StreamEvent.Created(f.event(), article, rawFrame)
             : new StreamEvent.Updated(f.event(), article, rawFrame);
-    deliver(user(() -> listener.onEvent(item)));
+    enqueue(user(() -> listener.onEvent(item)));
   }
 
   private static String sha256(String s) {
@@ -621,7 +696,7 @@ final class StreamEngine {
     if (ended || c.dropped || c != current) {
       return;
     }
-    if (lastBlockedEnd > c.lastPong || dispatcher.saturated()) {
+    if (lastBlockedEnd > c.lastPong || !parked.isEmpty()) {
       // We stopped reading because the listener was slow; that is not a dead connection.
       c.lastPong = Math.max(c.lastPong, lastBlockedEnd);
       armWatchdog(c);
@@ -644,6 +719,11 @@ final class StreamEngine {
 
   private void onClosed(Conn c, int code) {
     if (c.dropped) {
+      Runnable after = c.afterClose;
+      c.afterClose = null;
+      if (after != null && !ended) {
+        after.run();
+      }
       return;
     }
     clearTimers(c);
@@ -766,7 +846,7 @@ final class StreamEngine {
                   + delay
                   + " ms");
           QuotaWaitInfo info = new QuotaWaitInfo(error, Duration.ofMillis(delay), quotaWaits);
-          dispatcher.offer(user(() -> listener.onQuotaWait(info)));
+          enqueue(user(() -> listener.onQuotaWait(info)));
           break;
         }
       default:
@@ -785,7 +865,7 @@ final class StreamEngine {
 
   private void report(FinlightException error) {
     Log.debug(() -> name + ": reported " + error.getMessage());
-    dispatcher.offer(user(() -> listener.onError(error)));
+    enqueue(user(() -> listener.onError(error)));
   }
 
   /** Ends the stream: closes every socket, cancels every timer and stops both threads. */
@@ -807,6 +887,20 @@ final class StreamEngine {
     }
     current = null;
     rotatingFrom = null;
+    paused.clear();
+    if (stopRequested) {
+      parked.clear(); // skipped after close() anyway
+    } else {
+      // Events read before a terminal end still reach the listener, in order, before onClosed.
+      long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(FLUSH_WAIT_MS);
+      Runnable next;
+      while ((next = parked.poll()) != null) {
+        if (!dispatcher.offerUntil(next, deadline)) {
+          Log.warn(name + ": the listener did not take " + (parked.size() + 1) + " events");
+          parked.clear();
+        }
+      }
+    }
     dispatcher.finish(
         () -> listener.onClosed(error),
         () -> {
@@ -830,13 +924,50 @@ final class StreamEngine {
     };
   }
 
-  /** Delivers an article or other event; blocks the loop while the listener queue is full. */
-  private void deliver(Runnable task) {
-    if (!dispatcher.offerNow(task)) {
-      long started = now();
-      dispatcher.offer(task);
+  /**
+   * Queues a listener call without ever blocking the loop. When the dispatcher queue is full the
+   * call is parked; parked calls keep their order and move on as soon as the listener takes one.
+   */
+  private void enqueue(Runnable task) {
+    if (ended) {
+      return;
+    }
+    parked.add(task);
+    drainParked();
+  }
+
+  /** Moves parked calls into the dispatcher queue; resumes reading once nothing is parked. */
+  private void drainParked() {
+    if (parked.isEmpty()) {
+      return;
+    }
+    // Set before trying: a take after a failed offer then posts the next drain.
+    dispatcher.wantSpace();
+    Runnable next;
+    while ((next = parked.peek()) != null) {
+      if (!dispatcher.offerNow(next)) {
+        if (blockedSince == Long.MIN_VALUE) {
+          blockedSince = now();
+        }
+        return;
+      }
+      parked.poll();
+    }
+    if (blockedSince != Long.MIN_VALUE) {
+      long slow = now() - blockedSince;
+      blockedSince = Long.MIN_VALUE;
       lastBlockedEnd = now();
-      Log.debug(() -> name + ": the listener was slow for " + (now() - started) + " ms");
+      Log.debug(() -> name + ": the listener was slow for " + slow + " ms");
+    }
+    if (!paused.isEmpty()) {
+      List<Conn> resume = List.copyOf(paused);
+      paused.clear();
+      for (Conn c : resume) {
+        WebSocket ws = c.ws;
+        if (ws != null && !c.dropped && !ended) {
+          ws.request(1);
+        }
+      }
     }
   }
 
@@ -850,7 +981,12 @@ final class StreamEngine {
     @Nullable Runnable cancelPing;
     @Nullable Runnable cancelWatchdog;
     @Nullable Runnable cancelRotation;
+
+    /** Runs on the loop when this dropped connection's close arrives. */
+    @Nullable Runnable afterClose;
+
     private final StringBuilder buffer = new StringBuilder();
+    private long bufferBytes;
     private CompletableFuture<?> sends = CompletableFuture.completedFuture(null);
 
     Conn(String nonce) {
@@ -898,8 +1034,10 @@ final class StreamEngine {
         public @Nullable CompletionStage<?> onText(
             WebSocket webSocket, CharSequence data, boolean last) {
           buffer.append(data);
-          if (buffer.length() > cfg.maxMessageBytes()) {
+          bufferBytes += utf8Length(data);
+          if (bufferBytes > cfg.maxMessageBytes()) {
             buffer.setLength(0);
+            bufferBytes = 0;
             Log.warn(name + ": a stream message exceeded maxMessageBytes; reconnecting");
             webSocket.abort();
             return null;
@@ -910,6 +1048,7 @@ final class StreamEngine {
           }
           String message = buffer.toString();
           buffer.setLength(0);
+          bufferBytes = 0;
           if (!post(() -> onMessage(Conn.this, message))) {
             webSocket.abort();
           }
@@ -951,45 +1090,74 @@ final class StreamEngine {
     }
   }
 
+  /** The UTF-8 size of {@code s} without encoding it. */
+  static long utf8Length(CharSequence s) {
+    long n = 0;
+    int len = s.length();
+    for (int i = 0; i < len; i++) {
+      char ch = s.charAt(i);
+      if (ch < 0x80) {
+        n++;
+      } else if (ch < 0x800) {
+        n += 2;
+      } else if (Character.isHighSurrogate(ch)
+          && i + 1 < len
+          && Character.isLowSurrogate(s.charAt(i + 1))) {
+        n += 4;
+        i++;
+      } else {
+        n += 3;
+      }
+    }
+    return n;
+  }
+
   // --- user code -----------------------------------------------------------------------------
 
   /** One daemon thread that runs listener code from a bounded queue (R-WS-6). */
   private static final class Dispatcher {
     private final BlockingQueue<Runnable> queue = new ArrayBlockingQueue<>(QUEUE_CAPACITY);
     private final Thread thread;
+    private final Runnable onSpace;
+    private final AtomicBoolean spaceWanted = new AtomicBoolean();
     private volatile boolean finishing;
 
-    Dispatcher(String threadName) {
+    /**
+     * {@code onSpace} runs on the dispatcher thread after a take, when {@link #wantSpace} was set.
+     */
+    Dispatcher(String threadName, Runnable onSpace) {
       this.thread = new Thread(this::run, threadName);
       this.thread.setDaemon(true);
+      this.onSpace = onSpace;
     }
 
     void start() {
       thread.start();
     }
 
-    boolean saturated() {
-      return queue.remainingCapacity() == 0;
+    void wantSpace() {
+      spaceWanted.set(true);
     }
 
     boolean offerNow(Runnable task) {
       return !finishing && queue.offer(task);
     }
 
-    /** Queues a task; waits while the queue is full. */
-    void offer(Runnable task) {
-      if (finishing) {
-        return;
-      }
+    /** Queues a task, waiting while the queue is full but not past {@code deadlineNanos}. */
+    boolean offerUntil(Runnable task, long deadlineNanos) {
       try {
-        while (!queue.offer(task, 100, TimeUnit.MILLISECONDS)) {
-          if (finishing) {
-            return;
+        while (!finishing) {
+          if (queue.offer(task, 100, TimeUnit.MILLISECONDS)) {
+            return true;
+          }
+          if (System.nanoTime() - deadlineNanos > 0) {
+            return false;
           }
         }
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
       }
+      return false;
     }
 
     /** Queues the last task and the end action; nothing is accepted after. */
@@ -1021,6 +1189,9 @@ final class StreamEngine {
         } catch (InterruptedException e) {
           return;
         }
+        if (spaceWanted.compareAndSet(true, false)) {
+          onSpace.run();
+        }
         try {
           safe(task);
         } catch (Stop s) {
@@ -1029,12 +1200,15 @@ final class StreamEngine {
       }
     }
 
+    /** Runs user code; whatever it throws is logged, except a VM error (R-WS-6). */
     private static void safe(Runnable task) {
       try {
         task.run();
       } catch (Stop s) {
         throw s;
-      } catch (RuntimeException e) {
+      } catch (VirtualMachineError e) {
+        throw e;
+      } catch (Throwable e) {
         Log.warn("a stream listener threw; the stream goes on", e);
       }
     }

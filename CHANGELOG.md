@@ -44,7 +44,7 @@ section of the README and the full guide on [docs.finlight.me](https://docs.finl
   `WebhookVerificationException` and `PreemptedException`. All share `FinlightException` and `kind()`.
 - Retries: 5xx, network errors and attempt timeouts up to 3 times with jittered backoff (POST search
   included); 400, 401, 403, 404 and a monthly 429 never (also not in `searchAll`). A burst 429 waits
-  `Retry-After` (10 s when missing) and retries once; on by default, `retryOnBurst(false)` turns it off.
+  `Retry-After` (10 s when missing) and retries once; on by default, `retryOnBurst(RetryOnBurst.OFF)` turns it off.
   One `X-Request-Id` per call, kept on retries. Interrupting the thread cancels a call at once.
 - Streams: application ping every 25 s, a 60 s pong watchdog, connection renewal after 115 min,
   duplicate filter, hooks `onAdmitted`, `onReconnect` (with `lastSeenAt`), `onError`, `onQuotaWait`.

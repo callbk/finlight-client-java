@@ -185,7 +185,7 @@ class RulesRetryConfigLogTest {
     assertEquals("wss://wss.finlight.me", c.wssUrl());
     assertEquals(Duration.ofSeconds(30), c.timeout());
     assertEquals(3, c.maxRetries());
-    assertTrue(c.retryOnBurst());
+    assertEquals(RetryOnBurst.ONCE, c.retryOnBurst());
     assertEquals(Duration.ofSeconds(10), c.burstWait());
     assertEquals(10, c.maxPages());
     assertEquals(Duration.ofSeconds(25), c.pingInterval());

@@ -25,7 +25,8 @@ API v3 に対応する他の finlight SDK：TypeScript 4.x、Python 3.x、PHP 2.
 ## 動作要件
 
 - Java 17 以上（17 と 21 でテスト）
-- Jackson `jackson-databind` 2.13 以上（2.13.5 と 2.18.3 でテスト）
+- Jackson `jackson-databind` 2.13.5 以上（2.13.5 と 2.18.3 でテスト）。公開 POM は 2.13.5 を下限とし、Jackson BOM を
+  インポートしないため、ビルド側の Jackson バージョンがそのまま使われます。
 - JSpecify 1.0（注釈のみ）
 
 REST と WebSocket には JDK 標準の `java.net.http` クライアントを使い、その他の実行時依存はありません。
@@ -282,8 +283,11 @@ FinlightException                kind: api, validation, network, timeout, decode
 - 5xx、ネットワークエラー、試行のタイムアウトは、ジッター付きで間隔を伸ばしながら最大 3 回再試行します（POST の検索も含む）。
 - 400、401、403、404 は再試行しません。月間の 429 は即座に失敗し、`searchAll` でも同様です。REST は新しいクォータ期間を待ちません（待つのはストリームのみ）。
 - バーストの 429 は `Retry-After` ちょうど（ヘッダーがなければ 10 秒）待って 1 回だけ再試行します。既定で有効で、`maxRetries` には含まれません。
-  `retryOnBurst(false)` で即座に例外になります。
+  `retryOnBurst(RetryOnBurst.OFF)` で即座に例外になります。
 - 各呼び出しは独自の `X-Request-Id` を送り、再試行でも同じ値を使います。`requestId()` で参照できます。
+- JDK の `HttpClient` は、接続できなかったときやプール内の接続が閉じていたときに、GET を自ら再送することがあります。この再送は
+  `X-Request-Id` を保ち、`maxRetries` には含まれません。`-Djdk.httpclient.disableRetryConnect=true` で接続失敗後の再送を
+  JVM 全体で無効にできます。閉じたプール接続での再送は無効にできません。
 - 呼び出しスレッドを割り込むと呼び出しはキャンセルされます。待機は即座に終わり、再試行せず、割り込みフラグを戻したうえで
   `java.util.concurrent.CancellationException` を投げます。
 
@@ -295,7 +299,7 @@ FinlightConfig config = FinlightConfig.builder(apiKey)
     .wssUrl("wss://wss.finlight.me")          // raw streams use <wssUrl>/raw
     .timeout(Duration.ofSeconds(30))          // per attempt
     .totalTimeout(Duration.ofMinutes(2))      // per call, retries included; default none
-    .retryOnBurst(true)
+    .retryOnBurst(RetryOnBurst.ONCE)
     .quotaReconnect(true)
     .build();
 FinlightClient client = new FinlightClient(config);
@@ -310,7 +314,7 @@ FinlightClient client = new FinlightClient(config);
 | `totalTimeout` | none |
 | `maxRetries` | 3 |
 | `retryBaseDelay`, `retryMaxDelay` | 0.5 s, 8 s |
-| `retryOnBurst` | true (once); false (off) |
+| `retryOnBurst` | `RetryOnBurst.ONCE`; `RetryOnBurst.OFF` throws at once |
 | `burstWait` | 10 s, only without `Retry-After` |
 | `maxPages` | 10 |
 | `maxResponseBytes` | 32 MiB |
@@ -329,7 +333,7 @@ FinlightClient client = new FinlightClient(config);
 | `httpClient` | one the SDK creates |
 
 `httpClient(java.net.http.HttpClient)` で独自のクライアントを REST と WebSocket に使えます（プロキシ、TLS、Executor）。
-その接続タイムアウトとプロキシ設定が適用され、SDK がそれを閉じることはありません。独自の再試行で包まないでください。試行ごとにクォータを消費します。
+その接続タイムアウトとプロキシ設定が適用され、SDK がそれを閉じることはありません。独自の再試行で包まないでください。試行ごとにクォータを消費します。JDK 自身の GET 再送（「エラーと再試行」を参照）もこのクライアントに当てはまります。
 `client.close()` はそのクライアントのすべてのストリームを終了し、SDK が作成した HTTP クライアントを停止します。
 
 ## ログ

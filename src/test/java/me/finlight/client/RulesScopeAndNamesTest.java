@@ -164,6 +164,7 @@ class RulesScopeAndNamesTest {
                 "Gated",
                 "SearchAllResult",
                 "SearchAllOptions",
+                "RetryOnBurst",
                 // errors
                 "FinlightException",
                 "FinlightApiException",

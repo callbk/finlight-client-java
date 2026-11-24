@@ -480,7 +480,7 @@ class ConformanceRestTest {
   private static void burstVariants(JsonNode f) throws Exception {
     try (HttpMock mock = new HttpMock()) {
       FakeClock clock = new FakeClock();
-      FinlightClient off = Support.client(mock, clock, b -> b.retryOnBurst(false));
+      FinlightClient off = Support.client(mock, clock, b -> b.retryOnBurst(RetryOnBurst.OFF));
       mock.enqueue(f.get("response")).enqueue(f.get("response"));
       assertThrows(RateLimitedException.class, () -> off.articles().search());
       assertEquals(1, mock.requests.size(), "off: thrown at once");

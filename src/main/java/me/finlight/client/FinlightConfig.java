@@ -50,7 +50,7 @@ public final class FinlightConfig {
   private final int maxRetries;
   private final Duration retryBaseDelay;
   private final Duration retryMaxDelay;
-  private final boolean retryOnBurst;
+  private final RetryOnBurst retryOnBurst;
   private final Duration burstWait;
   private final int maxPages;
   private final long maxResponseBytes;
@@ -190,8 +190,8 @@ public final class FinlightConfig {
     return retryMaxDelay;
   }
 
-  /** Whether a burst 429 is retried once after {@code Retry-After}. */
-  public boolean retryOnBurst() {
+  /** What a burst 429 does: {@link RetryOnBurst#ONCE} retries once after {@code Retry-After}. */
+  public RetryOnBurst retryOnBurst() {
     return retryOnBurst;
   }
 
@@ -314,7 +314,7 @@ public final class FinlightConfig {
     private int maxRetries = 3;
     private Duration retryBaseDelay = Duration.ofMillis(500);
     private Duration retryMaxDelay = Duration.ofSeconds(8);
-    private boolean retryOnBurst = true;
+    private RetryOnBurst retryOnBurst = RetryOnBurst.ONCE;
     private Duration burstWait = Duration.ofSeconds(10);
     private int maxPages = 10;
     private long maxResponseBytes = 32L * 1024 * 1024;
@@ -391,11 +391,11 @@ public final class FinlightConfig {
     }
 
     /**
-     * Retry a burst 429 once after {@code Retry-After} ({@link #burstWait} without the header).
-     * Default true ({@code once}); false ({@code off}) throws the error at once.
+     * Burst 429: {@link RetryOnBurst#ONCE} (default) waits {@code Retry-After} ({@link #burstWait}
+     * without the header) and tries once more; {@link RetryOnBurst#OFF} throws the error at once.
      */
-    public Builder retryOnBurst(boolean retryOnBurst) {
-      this.retryOnBurst = retryOnBurst;
+    public Builder retryOnBurst(RetryOnBurst retryOnBurst) {
+      this.retryOnBurst = Objects.requireNonNull(retryOnBurst, "retryOnBurst");
       return this;
     }
 

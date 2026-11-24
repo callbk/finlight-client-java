@@ -244,4 +244,130 @@ class RulesStreamTest {
       p.stop();
     }
   }
+
+  /**
+   * JVM-1: a rotation dial refused because the plan's only connection is in use closes the old
+   * connection and dials again at once: no long wait, no onError, reason rotation.
+   */
+  @Test
+  void rotationAtTheConnectionLimitRedialsAtOnce() throws Exception {
+    String tooMany =
+        "{\"message\":\"Too many concurrent connections. Use x-takeover: true header to replace"
+            + " an existing connection.\"}";
+    try (WsServer ws = new WsServer()) {
+      StreamProbe p = start(ws, false, StreamParams.builder().build().toJson(), b -> {});
+      WsServer.Conn c1 = ws.nextDial("dial").conn();
+      c1.nextSubscribe();
+      c1.send(ADMITTED);
+      StreamProbe.waitFor(() -> p.admitted.size() == 1, "admitted");
+      ws.script.add(new WsServer.Refusal(403, tooMany));
+      p.advance(115 * 60 * 1000);
+      assertNull(ws.nextDial("refused rotation dial").conn());
+      WsServer.Conn c2 = null;
+      while (c2 == null) {
+        c2 = ws.nextDial("redial").conn();
+      }
+      assertFalse(c1.open, "the old connection was closed before the redial");
+      assertEquals(1000, c1.closeCodeFromClient);
+      c2.nextSubscribe();
+      c2.send(ADMITTED);
+      StreamProbe.waitFor(() -> p.reconnects.size() == 1, "onReconnect");
+      assertEquals(ReconnectReason.ROTATION, p.reconnects.get(0).reason());
+      for (StreamProbe.Scheduled sc : p.scheduled) {
+        assertTrue(sc.delayMs() < 60_000, "no long wait: " + sc);
+        assertEquals(ReconnectReason.ROTATION, sc.reason());
+      }
+      p.settle();
+      assertTrue(p.errors.isEmpty(), "no onError: " + p.errors);
+      assertFalse(p.done);
+      p.stop();
+    }
+  }
+
+  /** JVM-2: an Error thrown by a listener (Kotlin TODO(), AssertionError) does not stop events. */
+  @Test
+  void listenerErrorsDoNotKillDelivery() throws Exception {
+    try (WsServer ws = new WsServer()) {
+      StreamProbe p = start(ws, false, StreamParams.builder().build().toJson(), b -> {});
+      java.util.concurrent.atomic.AtomicInteger calls =
+          new java.util.concurrent.atomic.AtomicInteger();
+      p.onEventHook =
+          e -> {
+            if (calls.incrementAndGet() == 1) {
+              throw new AssertionError("not implemented");
+            }
+          };
+      WsServer.Conn c = ws.nextDial("dial").conn();
+      c.send(frame("article.created", article("A", null, "2026-11-23T10:00:00.000Z")));
+      c.send(frame("article.created", article("B", null, "2026-11-23T10:00:01.000Z")));
+      StreamProbe.waitFor(() -> p.items.size() == 1, "the second article");
+      assertEquals(2, calls.get());
+      p.stop();
+      assertTrue(p.done, "onClosed ran");
+    }
+  }
+
+  /**
+   * JVM-3: a blocked listener stops reading frames (back-pressure) but not the keep-alive: pings
+   * still go out every 25 s and the watchdog does not replace the connection.
+   */
+  @Test
+  void blockedListenerKeepsPinging() throws Exception {
+    int total = 1100;
+    try (WsServer ws = new WsServer()) {
+      ws.autoPong = false;
+      StreamProbe p = start(ws, false, StreamParams.builder().build().toJson(), b -> {});
+      java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
+      p.onEventHook =
+          e -> {
+            try {
+              release.await();
+            } catch (InterruptedException x) {
+              Thread.currentThread().interrupt();
+            }
+          };
+      WsServer.Conn c = ws.nextDial("dial").conn();
+      c.nextSubscribe();
+      Thread sender =
+          new Thread(
+              () -> {
+                for (int i = 0; i < total; i++) {
+                  c.send(
+                      frame("article.created", article("A" + i, null, "2026-11-23T10:00:00.000Z")));
+                }
+              });
+      sender.setDaemon(true);
+      sender.start();
+      // 1 running + 1024 queued + 1 parked; then the stream stops reading.
+      StreamProbe.waitFor(() -> p.frames.get() >= 1026, "the listener queue to fill");
+      Thread.sleep(200);
+      assertEquals(1026, p.frames.get(), "no frame is read while the listener is behind");
+      int before = p.pingsSent.get();
+      p.advance(125_000);
+      assertEquals(
+          before + 5, p.pingsSent.get(), "a ping every 25 s while the listener is blocked");
+      StreamProbe.waitFor(
+          () ->
+              c.received.stream().filter(n -> "ping".equals(n.path("action").asText())).count()
+                  >= 5,
+          "the pings at the server");
+      assertTrue(p.scheduled.isEmpty(), "no reconnect: " + p.scheduled);
+      assertEquals(1, ws.dialCount);
+      release.countDown();
+      StreamProbe.waitFor(
+          () -> p.items.size() == total, "every article after the listener caught up");
+      assertFalse(p.done);
+      p.stop();
+    }
+  }
+
+  /** JVM-7: maxMessageBytes counts UTF-8 bytes. */
+  @Test
+  void messageSizeCountsUtf8Bytes() {
+    assertEquals(3, StreamEngine.utf8Length("abc"));
+    assertEquals(2, StreamEngine.utf8Length("\u00e9"));
+    assertEquals(3, StreamEngine.utf8Length("\u20ac"));
+    assertEquals(4, StreamEngine.utf8Length("\ud83d\ude00"));
+    assertEquals(9, StreamEngine.utf8Length("\u65e5\u672c\u8a9e"));
+  }
 }

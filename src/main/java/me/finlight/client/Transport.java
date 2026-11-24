@@ -95,7 +95,9 @@ final class Transport {
       FinlightApiException error = parsed.build();
       Log.debug(() -> req.method() + " " + req.path() + " -> " + status + " " + error.apiKind());
       if (error instanceof RateLimitedException rl) {
-        if (RateLimitType.BURST.equals(rl.limitType()) && config.retryOnBurst() && !burstRetried) {
+        if (RateLimitType.BURST.equals(rl.limitType())
+            && config.retryOnBurst() == RetryOnBurst.ONCE
+            && !burstRetried) {
           burstRetried = true;
           Duration wait = rl.retryAfter() != null ? rl.retryAfter() : config.burstWait();
           Log.warn(

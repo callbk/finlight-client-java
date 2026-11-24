@@ -21,7 +21,8 @@ SDK 버전과 API 버전은 서로 독립적입니다. 서버에 추가되는 �
 ## 요구 사항
 
 - Java 17 이상(17과 21에서 테스트)
-- Jackson `jackson-databind` 2.13 이상(2.13.5와 2.18.3으로 테스트)
+- Jackson `jackson-databind` 2.13.5 이상(2.13.5와 2.18.3으로 테스트). 배포된 POM은 2.13.5를 하한으로 두고 Jackson BOM을
+  가져오지 않으므로, 빌드의 Jackson 버전이 그대로 유지됩니다.
 - JSpecify 1.0(어노테이션만)
 
 REST와 WebSocket은 JDK의 `java.net.http` 클라이언트를 사용하며 다른 런타임 의존성은 없습니다.
@@ -149,8 +150,11 @@ Webhook을 `payloadVersion` 3으로 바꾸고 약 2시간 기다립니다. 전�
 - 400, 401, 403, 404는 재시도하지 않습니다. 월간 429는 즉시 실패하며 `searchAll`에서도 같습니다. REST는 새 할당량 기간을 기다리지 않습니다
   (기다리는 것은 스트림뿐입니다).
 - 버스트 429는 정확히 `Retry-After`만큼(헤더가 없으면 10초) 기다린 뒤 한 번 더 시도합니다. 기본으로 켜져 있고 `maxRetries`에 포함되지 않습니다.
-  `retryOnBurst(false)`는 즉시 예외를 던집니다.
+  `retryOnBurst(RetryOnBurst.OFF)`는 즉시 예외를 던집니다.
 - 호출마다 자체 `X-Request-Id`를 보내며 재시도에서도 같은 값을 씁니다. `requestId()`로 확인할 수 있습니다.
+- JDK `HttpClient`는 연결하지 못했거나 풀의 연결이 닫혀 있었을 때 GET을 스스로 다시 보낼 수 있습니다. 이 재전송은
+  `X-Request-Id`를 유지하고 `maxRetries`에 포함되지 않습니다. `-Djdk.httpclient.disableRetryConnect=true`로 연결 실패 후의
+  재전송을 JVM 전체에서 끌 수 있습니다. 닫힌 풀 연결에서의 재전송은 끌 수 없습니다.
 - 호출 스레드를 인터럽트하면 호출이 취소됩니다. 대기는 즉시 끝나고 재시도하지 않으며, 인터럽트 플래그를 복원한 뒤
   `java.util.concurrent.CancellationException`을 던집니다.
 
@@ -161,7 +165,7 @@ Webhook을 `payloadVersion` 3으로 바꾸고 약 2시간 기다립니다. 전�
 <<TABLE 3>>
 
 `httpClient(java.net.http.HttpClient)`는 직접 만든 클라이언트를 REST와 WebSocket에 사용합니다(프록시, TLS, Executor). 그 연결 타임아웃과
-프록시 설정이 적용되고 SDK는 이를 닫지 않습니다. 자체 재시도로 감싸지 마세요. 시도마다 할당량을 씁니다. `client.close()`는 그 클라이언트의
+프록시 설정이 적용되고 SDK는 이를 닫지 않습니다. 자체 재시도로 감싸지 마세요. 시도마다 할당량을 씁니다. JDK 자체의 GET 재전송("오류와 재시도" 참고)도 이 클라이언트에 적용됩니다. `client.close()`는 그 클라이언트의
 모든 스트림을 끝내고 SDK가 만든 HTTP 클라이언트를 종료합니다.
 
 ## 로깅

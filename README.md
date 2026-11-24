@@ -24,7 +24,8 @@ releases. Other finlight SDKs that speak API v3: TypeScript 4.x, Python 3.x, PHP
 ## Requirements
 
 - Java 17 or newer (tested on 17 and 21)
-- Jackson `jackson-databind` 2.13 or newer (tested with 2.13.5 and 2.18.3)
+- Jackson `jackson-databind` 2.13.5 or newer (tested with 2.13.5 and 2.18.3). The published POM names
+  2.13.5 as the floor and imports no Jackson BOM, so your build keeps its own Jackson version.
 - JSpecify 1.0 (annotations only)
 
 REST and WebSocket use the JDK's `java.net.http` client; there is no other runtime dependency.
@@ -296,8 +297,12 @@ FinlightException                kind: api, validation, network, timeout, decode
 - 400, 401, 403 and 404 are never retried. A monthly 429 fails at once, also inside `searchAll`: REST
   never waits for a new quota period (only streams do).
 - A burst 429 waits exactly `Retry-After` (10 s without the header) and tries once more. This is on by
-  default and does not count against `maxRetries`; `retryOnBurst(false)` throws at once.
+  default and does not count against `maxRetries`; `retryOnBurst(RetryOnBurst.OFF)` throws at once.
 - Every call sends its own `X-Request-Id`, the same on each retry; `requestId()` carries it.
+- The JDK `HttpClient` itself can repeat a GET when it could not connect or a pooled connection
+  turned out to be closed. Such a repeat keeps the `X-Request-Id` and does not count against
+  `maxRetries`. `-Djdk.httpclient.disableRetryConnect=true` turns off the repeat after a failed
+  connect for the whole JVM; the repeat on a closed pooled connection cannot be turned off.
 - Interrupt the calling thread to cancel a call: waits end at once, nothing is retried, and the call
   throws `java.util.concurrent.CancellationException` with the interrupt flag restored.
 
@@ -309,7 +314,7 @@ FinlightConfig config = FinlightConfig.builder(apiKey)
     .wssUrl("wss://wss.finlight.me")          // raw streams use <wssUrl>/raw
     .timeout(Duration.ofSeconds(30))          // per attempt
     .totalTimeout(Duration.ofMinutes(2))      // per call, retries included; default none
-    .retryOnBurst(true)
+    .retryOnBurst(RetryOnBurst.ONCE)
     .quotaReconnect(true)
     .build();
 FinlightClient client = new FinlightClient(config);
@@ -324,7 +329,7 @@ FinlightClient client = new FinlightClient(config);
 | `totalTimeout` | none |
 | `maxRetries` | 3 |
 | `retryBaseDelay`, `retryMaxDelay` | 0.5 s, 8 s |
-| `retryOnBurst` | true (once); false (off) |
+| `retryOnBurst` | `RetryOnBurst.ONCE`; `RetryOnBurst.OFF` throws at once |
 | `burstWait` | 10 s, only without `Retry-After` |
 | `maxPages` | 10 |
 | `maxResponseBytes` | 32 MiB |
@@ -344,7 +349,8 @@ FinlightClient client = new FinlightClient(config);
 
 `httpClient(java.net.http.HttpClient)` uses your client for REST and WebSocket (proxy, TLS, executor).
 Its connect timeout and proxy settings apply; the SDK never closes it. Do not wrap it with your own
-retries: every attempt costs quota. `client.close()` ends all streams of the client and shuts down the
+retries: every attempt costs quota. The JDK's own GET repeats (see Errors and retries) apply to it
+too. `client.close()` ends all streams of the client and shuts down the
 HTTP client the SDK created.
 
 ## Logging

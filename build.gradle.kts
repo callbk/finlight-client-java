@@ -17,7 +17,9 @@ description =
 // JDK 17 CI job compiles and tests without linting.
 val errorProneSupported = JavaVersion.current() >= JavaVersion.VERSION_21
 
-// The lowest supported Jackson is 2.13. CI runs the suite with -PjacksonVersion=2.13.5.
+// The lowest supported Jackson is 2.13.5 (the published floor). Builds and tests use jacksonVersion;
+// CI also runs the suite with -PjacksonVersion=2.13.5.
+val minJackson = "2.13.5"
 val jacksonVersion = providers.gradleProperty("jacksonVersion").getOrElse("2.18.3")
 
 repositories {
@@ -83,15 +85,22 @@ configurations["liveImplementation"].extendsFrom(configurations.implementation.g
 dependencies {
   api("org.jspecify:jspecify:1.0.0")
 
-  implementation(platform("com.fasterxml.jackson:jackson-bom:$jacksonVersion"))
-  implementation("com.fasterxml.jackson.core:jackson-databind")
+  // Published as a plain dependency with the lowest supported version as its floor and no BOM, so
+  // consumers are not moved to a newer Jackson (or newer Jackson modules) by this SDK.
+  implementation("com.fasterxml.jackson.core:jackson-databind") {
+    version { require(minJackson) }
+  }
+  // Not published: tests, examples and live checks run on jacksonVersion.
+  testImplementation(platform("com.fasterxml.jackson:jackson-bom:$jacksonVersion"))
 
   testImplementation(platform("org.junit:junit-bom:5.11.4"))
   testImplementation("org.junit.jupiter:junit-jupiter")
   testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 
   "examplesImplementation"("org.jspecify:jspecify:1.0.0")
+  "examplesImplementation"(platform("com.fasterxml.jackson:jackson-bom:$jacksonVersion"))
   "liveImplementation"("org.jspecify:jspecify:1.0.0")
+  "liveImplementation"(platform("com.fasterxml.jackson:jackson-bom:$jacksonVersion"))
 
   if (errorProneSupported) {
     errorprone("com.google.errorprone:error_prone_core:2.50.0")
