@@ -1,8 +1,10 @@
 /**
- * Official JVM client for the <a href="https://finlight.me">finlight.me</a> financial news API.
+ * Client for the finlight API v3: REST search and lookups ({@link
+ * me.finlight.client.FinlightClient}), real-time streams over WebSocket and webhook verification
+ * ({@link me.finlight.client.Webhooks}).
  *
- * <p>Entry point is {@link me.finlight.client.FinlightClient}. All types are null-marked: every
- * reference is non-null unless annotated {@link org.jspecify.annotations.Nullable}.
+ * <p>Every public type of the SDK lives in this package. Classes that are not public are
+ * implementation details.
  */
 @NullMarked
 package me.finlight.client;
