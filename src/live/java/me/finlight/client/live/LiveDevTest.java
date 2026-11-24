@@ -16,6 +16,7 @@ import java.util.concurrent.TimeUnit;
 import me.finlight.client.AdmittedInfo;
 import me.finlight.client.Article;
 import me.finlight.client.ArticlePage;
+import me.finlight.client.CompanyGetOptions;
 import me.finlight.client.CompanyList;
 import me.finlight.client.CompanyRecord;
 import me.finlight.client.CompanySearchParams;
@@ -115,8 +116,11 @@ class LiveDevTest {
     if (!companies.isEmpty()) {
       CompanyRecord record = client.companies().get(companies.get(0).companyId());
       assertNotNull(record.cacheInfo());
-      CompanyRecord again = client.companies().get(record.companyId());
-      System.out.println("company revalidated, notModified " + again.cacheInfo().notModified());
+      CompanyRecord again =
+          client
+              .companies()
+              .get(record.companyId(), CompanyGetOptions.ifNoneMatch(record.cacheInfo().etag()));
+      System.out.println("company revalidated, not modified " + (again == null));
     }
   }
 

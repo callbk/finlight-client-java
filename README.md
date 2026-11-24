@@ -126,7 +126,7 @@ Article b = client.articles().getByLink("https://www.reuters.com/...");
 
 CompanyList found = client.companies().search(CompanySearchParams.of("NVDA", "XNAS")); // at most 10
 CompanyList many = client.companies().getMany(4821L, 1001L);
-CompanyRecord nvda = client.companies().get(4821);       // revalidated with its ETag next time
+CompanyRecord nvda = client.companies().get(4821);       // every call is a request (1 credit)
 String etag = nvda.cacheInfo().etag();
 CompanyRecord changed = client.companies().get(4821, CompanyGetOptions.ifNoneMatch(etag)); // null: not modified
 
@@ -138,8 +138,10 @@ SourceList sources = client.sources().list();
 - Company lookups need the `entityAccess` entitlement (`ForbiddenException` otherwise).
 - Every company and source lookup costs 1 credit of your monthly quota per request, like an article
   request (`getMany` with several ids too). A 304 revalidation and errors cost 1 credit too.
-- `companies().get(id)` keeps the record with its ETag and revalidates it; an unchanged record comes
-  from the cache with `cacheInfo().notModified()` true. With your own `ifNoneMatch` a 304 returns null.
+- The SDK keeps no cache of company records. To save credits, keep the records yourself and do not
+  call again within `max-age` (`cacheInfo().cacheControl()`). To revalidate, pass the ETag
+  (`cacheInfo().etag()`) as `ifNoneMatch`: an unchanged record returns null. A 304 also costs 1 credit,
+  so it saves the download, not the credit. Articles already carry the main company fields.
 - Lists (`CompanyList`, `SourceList`, `ArticlePage.articles()`) skip an entry that cannot be read, log a
   warning and keep it in `skipped()` with its index and raw JSON.
 
@@ -346,7 +348,6 @@ FinlightClient client = new FinlightClient(config);
 | `burstWait` | 10 s, only without `Retry-After` |
 | `maxPages` | 10 |
 | `maxResponseBytes` | 32 MiB |
-| `companyCacheSize` | 256 (0 turns it off) |
 | `pingInterval` | 25 s |
 | `watchdogTimeout` | 60 s |
 | `rotationInterval` | 115 min |

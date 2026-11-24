@@ -54,7 +54,6 @@ public final class FinlightConfig {
   private final Duration burstWait;
   private final int maxPages;
   private final long maxResponseBytes;
-  private final int companyCacheSize;
   private final Duration pingInterval;
   private final Duration watchdogTimeout;
   private final Duration rotationInterval;
@@ -83,7 +82,6 @@ public final class FinlightConfig {
     this.burstWait = b.burstWait;
     this.maxPages = b.maxPages;
     this.maxResponseBytes = b.maxResponseBytes;
-    this.companyCacheSize = b.companyCacheSize;
     this.pingInterval = b.pingInterval;
     this.watchdogTimeout = b.watchdogTimeout;
     this.rotationInterval = b.rotationInterval;
@@ -132,7 +130,6 @@ public final class FinlightConfig {
     b.burstWait = burstWait;
     b.maxPages = maxPages;
     b.maxResponseBytes = maxResponseBytes;
-    b.companyCacheSize = companyCacheSize;
     b.pingInterval = pingInterval;
     b.watchdogTimeout = watchdogTimeout;
     b.rotationInterval = rotationInterval;
@@ -208,11 +205,6 @@ public final class FinlightConfig {
   /** Largest REST response body the SDK reads. */
   public long maxResponseBytes() {
     return maxResponseBytes;
-  }
-
-  /** Company records the SDK keeps for ETag revalidation; 0 turns the cache off. */
-  public int companyCacheSize() {
-    return companyCacheSize;
   }
 
   /** Interval of the application ping on streams. */
@@ -318,7 +310,6 @@ public final class FinlightConfig {
     private Duration burstWait = Duration.ofSeconds(10);
     private int maxPages = 10;
     private long maxResponseBytes = 32L * 1024 * 1024;
-    private int companyCacheSize = 256;
     private Duration pingInterval = Duration.ofSeconds(25);
     private Duration watchdogTimeout = Duration.ofSeconds(60);
     private Duration rotationInterval = Duration.ofMinutes(115);
@@ -420,15 +411,6 @@ public final class FinlightConfig {
         throw new FinlightValidationException("maxResponseBytes", "maxResponseBytes must be > 0");
       }
       this.maxResponseBytes = maxResponseBytes;
-      return this;
-    }
-
-    /** Company records kept for ETag revalidation. Default 256; 0 turns the cache off. */
-    public Builder companyCacheSize(int companyCacheSize) {
-      if (companyCacheSize < 0) {
-        throw new FinlightValidationException("companyCacheSize", "companyCacheSize must be >= 0");
-      }
-      this.companyCacheSize = companyCacheSize;
       return this;
     }
 

@@ -71,8 +71,9 @@ REST 调用会阻塞当前线程。每个 Builder 方法对应一个 API 键名�
 - 公司查询需要 `entityAccess` 权限（否则为 `ForbiddenException`）。
 - 公司和来源查询与文章请求一样，每个请求消耗月度配额 1 个额度（含多个 ID 的 `getMany` 也算 1 个请求）。
   304 重新验证和错误也消耗 1 个额度。
-- `companies().get(id)` 会缓存记录及其 ETag 并重新验证；未变化时从缓存返回，`cacheInfo().notModified()` 为 true。
-  使用自己的 `ifNoneMatch` 时，304 返回 null。
+- SDK 不缓存公司记录。想节省额度，请自行保存记录，并在 `max-age`（`cacheInfo().cacheControl()`）内不再调用。
+  重新验证时把 ETag（`cacheInfo().etag()`）作为 `ifNoneMatch` 传入；未变化时返回 null。304 也消耗 1 个额度，
+  所以节省的是下载，而不是额度。文章中已包含主要的公司字段。
 - 列表（`CompanyList`、`SourceList`、`ArticlePage.articles()`）会跳过无法读取的条目，记录警告，并将其索引与原始 JSON
   保存在 `skipped()` 中。
 

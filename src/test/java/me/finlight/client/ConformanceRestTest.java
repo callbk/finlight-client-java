@@ -135,15 +135,16 @@ class ConformanceRestTest {
           assertNotNull(info);
           assertEquals(f.at("/response/headers/etag").asText(), info.etag());
           assertEquals(f.at("/response/headers/cache-control").asText(), info.cacheControl());
-          assertFalse(info.notModified());
+          assertNull(r.header("if-none-match"), "no If-None-Match without a caller ifNoneMatch");
+          noOwnCompanyCache(f);
           List<String> mics = c.listings().stream().map(Listing::mic).toList();
           assertEquals(mics.size(), Set.copyOf(mics).size(), "one listing per exchange");
           assertEquals(c.primaryListing().mic(), c.listings().get(0).mic(), "primary first");
           assertEquals(true, c.listings().get(0).active());
         }
         case "R-09" -> {
+          assertEquals(args.get("ifNoneMatch").asText(), r.header("if-none-match"));
           assertNull(result, "304 with a caller ETag is 'not modified'");
-          ownCacheRevalidation(f);
         }
         case "R-10" -> {
           SourceList list = assertInstanceOf(SourceList.class, result);
@@ -163,18 +164,17 @@ class ConformanceRestTest {
     }
   }
 
-  /** R-09, second half: the SDK revalidates its own cached copy and returns it on 304. */
-  private static void ownCacheRevalidation(JsonNode notModified) throws Exception {
-    JsonNode ok = Kit.load("fixtures/requests/companies-get.json");
+  /** R-08: the SDK keeps no company cache; a second get is a plain request again. */
+  private static void noOwnCompanyCache(JsonNode ok) throws Exception {
     try (HttpMock mock = new HttpMock()) {
       FinlightClient client = Support.client(mock, new FakeClock());
-      mock.enqueue(ok.get("response")).enqueue(notModified.get("response"));
+      mock.enqueue(ok.get("response")).enqueue(ok.get("response"));
       CompanyRecord first = client.companies().get(900001);
       CompanyRecord second = client.companies().get(900001);
+      assertEquals(2, mock.requests.size());
       assertNull(mock.requests.get(0).header("if-none-match"));
-      assertEquals(first.cacheInfo().etag(), mock.requests.get(1).header("if-none-match"));
+      assertNull(mock.requests.get(1).header("if-none-match"));
       assertEquals(first, second);
-      assertTrue(second.cacheInfo().notModified());
       client.close();
     }
   }

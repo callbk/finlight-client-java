@@ -123,7 +123,7 @@ Article b = client.articles().getByLink("https://www.reuters.com/...");
 
 CompanyList found = client.companies().search(CompanySearchParams.of("NVDA", "XNAS")); // at most 10
 CompanyList many = client.companies().getMany(4821L, 1001L);
-CompanyRecord nvda = client.companies().get(4821);       // revalidated with its ETag next time
+CompanyRecord nvda = client.companies().get(4821);       // every call is a request (1 credit)
 String etag = nvda.cacheInfo().etag();
 CompanyRecord changed = client.companies().get(4821, CompanyGetOptions.ifNoneMatch(etag)); // null: not modified
 
@@ -134,8 +134,10 @@ SourceList sources = client.sources().list();
 - 기업 조회에는 `entityAccess` 권한이 필요합니다(없으면 `ForbiddenException`).
 - 기업 및 소스 조회는 기사 요청처럼 요청마다 월간 할당량에서 1 크레딧을 씁니다(ID가 여러 개인 `getMany`도 요청 1건).
   304 재검증과 오류도 1 크레딧을 씁니다.
-- `companies().get(id)`는 레코드를 ETag와 함께 보관하고 재검증합니다. 바뀌지 않았으면 캐시에서 반환하며
-  `cacheInfo().notModified()`가 true입니다. 직접 `ifNoneMatch`를 주면 304는 null을 반환합니다.
+- SDK는 기업 레코드를 캐시하지 않습니다. 크레딧을 아끼려면 레코드를 직접 보관하고 `max-age`
+  (`cacheInfo().cacheControl()`) 동안은 다시 호출하지 마세요. 재검증하려면 ETag(`cacheInfo().etag()`)를
+  `ifNoneMatch`로 넘깁니다. 바뀌지 않았으면 null을 반환합니다. 304도 1 크레딧을 쓰므로 아끼는 것은
+  다운로드이지 크레딧이 아닙니다. 기사에는 주요 기업 필드가 이미 들어 있습니다.
 - 목록(`CompanyList`, `SourceList`, `ArticlePage.articles()`)은 읽을 수 없는 항목을 건너뛰고 경고를 남기며,
   인덱스와 원본 JSON을 `skipped()`에 보관합니다.
 
@@ -329,7 +331,6 @@ FinlightClient client = new FinlightClient(config);
 | `burstWait` | 10 s, only without `Retry-After` |
 | `maxPages` | 10 |
 | `maxResponseBytes` | 32 MiB |
-| `companyCacheSize` | 256 (0 turns it off) |
 | `pingInterval` | 25 s |
 | `watchdogTimeout` | 60 s |
 | `rotationInterval` | 115 min |

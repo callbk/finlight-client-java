@@ -1,6 +1,6 @@
 # Conformance
 
-This client runs every case of the finlight API v3 contract kit `3.0.0-rc.5` (vendored in
+This client runs every case of the finlight API v3 contract kit `3.0.0-rc.6` (vendored in
 `conformance/`) as its own JUnit 5 dynamic test. The test name starts with the case id.
 HTTP cases run against a real HTTP server on 127.0.0.1 (`HttpMock`), WebSocket cases against an
 in-process WebSocket server on raw sockets (`WsServer`), with a fake clock (`FakeClock`).

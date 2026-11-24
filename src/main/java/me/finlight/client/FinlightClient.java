@@ -7,7 +7,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.AbstractMap.SimpleEntry;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -290,21 +289,9 @@ public final class FinlightClient implements AutoCloseable {
    */
   public static final class Companies {
     private final FinlightClient client;
-    private final Map<Long, CompanyRecord> cache;
 
     private Companies(FinlightClient client) {
       this.client = client;
-      int size = client.config.companyCacheSize();
-      this.cache =
-          java.util.Collections.synchronizedMap(
-              new LinkedHashMap<>(16, 0.75f, true) {
-                private static final long serialVersionUID = 1L;
-
-                @Override
-                protected boolean removeEldestEntry(Map.Entry<Long, CompanyRecord> eldest) {
-                  return size() > size;
-                }
-              });
     }
 
     /** Resolves a query to at most 10 companies. There are no pages. Costs 1 credit. */
@@ -348,9 +335,9 @@ public final class FinlightClient implements AutoCloseable {
     }
 
     /**
-     * One company. The SDK keeps the record with its ETag and revalidates it on the next call; an
-     * unchanged record (304) comes from the cache with {@link CacheInfo#notModified()} true. Every
-     * call costs 1 credit, a 304 revalidation included.
+     * One company. The SDK keeps no cache of company records: every call is a request and costs 1
+     * credit. {@link CompanyRecord#cacheInfo()} carries the ETag and Cache-Control, so you can keep
+     * the record yourself and skip the call within {@code max-age}.
      *
      * @throws NotFoundException when the id does not exist
      */
@@ -363,47 +350,26 @@ public final class FinlightClient implements AutoCloseable {
     }
 
     /**
-     * One company, with options. With {@link CompanyGetOptions#ifNoneMatch} an unchanged record
-     * returns null ("not modified"), never an error. Every call costs 1 credit, a 304 revalidation
-     * included.
+     * One company, with options. With {@link CompanyGetOptions#ifNoneMatch} the SDK sends your ETag
+     * as {@code If-None-Match}; an unchanged record returns null ("not modified"), never an error.
+     * Every call costs 1 credit, a 304 included: the conditional request saves the download, not
+     * the credit.
      */
     public @Nullable CompanyRecord get(long companyId, CompanyGetOptions options) {
       if (companyId < 1) {
         throw new FinlightValidationException("companyId", "companyId must be 1 or more");
       }
       Objects.requireNonNull(options, "options");
-      String callerTag = options.ifNoneMatch();
-      CompanyRecord cached = callerTag == null ? cache.get(companyId) : null;
-      String sentTag =
-          callerTag != null
-              ? callerTag
-              : cached != null && cached.cacheInfo() != null ? cached.cacheInfo().etag() : null;
-      Map<String, String> headers = sentTag == null ? Map.of() : Map.of("If-None-Match", sentTag);
+      String tag = options.ifNoneMatch();
+      Map<String, String> headers = tag == null ? Map.of() : Map.of("If-None-Match", tag);
       Transport.Response r = client.get("/v3/companies/" + companyId, List.of(), headers);
-      String etag = r.headers().first("etag");
-      String cacheControl = r.headers().first("cache-control");
       if (r.status() == 304) {
-        if (callerTag != null || cached == null) {
-          return null;
-        }
-        CompanyRecord fresh =
-            cached.withCacheInfo(new CacheInfo(etag != null ? etag : sentTag, cacheControl, true));
-        remember(fresh);
-        return fresh;
+        return null;
       }
       JsonNode body = Envelopes.parse(r.body());
-      CompanyRecord record =
-          Envelopes.company(body).withCacheInfo(new CacheInfo(etag, cacheControl, false));
-      remember(record);
-      return record;
-    }
-
-    private void remember(CompanyRecord record) {
-      if (client.config.companyCacheSize() > 0
-          && record.cacheInfo() != null
-          && record.cacheInfo().etag() != null) {
-        cache.put(record.companyId(), record);
-      }
+      return Envelopes.company(body)
+          .withCacheInfo(
+              new CacheInfo(r.headers().first("etag"), r.headers().first("cache-control")));
     }
   }
 

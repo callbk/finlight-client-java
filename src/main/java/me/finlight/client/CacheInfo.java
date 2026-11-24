@@ -3,16 +3,18 @@ package me.finlight.client;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 
-/** HTTP caching data of a company record from {@code companies().get(id)}. */
+/**
+ * HTTP caching data of a company record from {@code companies().get(id)}. The SDK keeps no cache of
+ * its own: keep the record yourself, reuse it within {@code max-age}, and pass {@link #etag()} back
+ * as {@code ifNoneMatch} to revalidate it.
+ */
 public final class CacheInfo {
   private final @Nullable String etag;
   private final @Nullable String cacheControl;
-  private final boolean notModified;
 
-  CacheInfo(@Nullable String etag, @Nullable String cacheControl, boolean notModified) {
+  CacheInfo(@Nullable String etag, @Nullable String cacheControl) {
     this.etag = etag;
     this.cacheControl = cacheControl;
-    this.notModified = notModified;
   }
 
   /** The {@code ETag} header; pass it as {@code ifNoneMatch} later. */
@@ -20,31 +22,25 @@ public final class CacheInfo {
     return etag;
   }
 
-  /** The {@code Cache-Control} header. */
+  /** The {@code Cache-Control} header, with {@code max-age}. */
   public @Nullable String cacheControl() {
     return cacheControl;
-  }
-
-  /** True when the server answered 304 and the SDK returned its cached copy. */
-  public boolean notModified() {
-    return notModified;
   }
 
   @Override
   public boolean equals(@Nullable Object o) {
     return o instanceof CacheInfo c
         && Objects.equals(etag, c.etag)
-        && Objects.equals(cacheControl, c.cacheControl)
-        && notModified == c.notModified;
+        && Objects.equals(cacheControl, c.cacheControl);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(etag, cacheControl, notModified);
+    return Objects.hash(etag, cacheControl);
   }
 
   @Override
   public String toString() {
-    return "CacheInfo{etag=" + etag + ", notModified=" + notModified + "}";
+    return "CacheInfo{etag=" + etag + ", cacheControl=" + cacheControl + "}";
   }
 }

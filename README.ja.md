@@ -124,7 +124,7 @@ Article b = client.articles().getByLink("https://www.reuters.com/...");
 
 CompanyList found = client.companies().search(CompanySearchParams.of("NVDA", "XNAS")); // at most 10
 CompanyList many = client.companies().getMany(4821L, 1001L);
-CompanyRecord nvda = client.companies().get(4821);       // revalidated with its ETag next time
+CompanyRecord nvda = client.companies().get(4821);       // every call is a request (1 credit)
 String etag = nvda.cacheInfo().etag();
 CompanyRecord changed = client.companies().get(4821, CompanyGetOptions.ifNoneMatch(etag)); // null: not modified
 
@@ -135,8 +135,10 @@ SourceList sources = client.sources().list();
 - 企業の参照には `entityAccess` 権限が必要です（ない場合は `ForbiddenException`）。
 - 企業とソースの参照は、記事リクエストと同じくリクエストごとに月間クォータを 1 クレジット消費します（複数 ID の `getMany` も 1 リクエスト）。
   304 による再検証とエラーも 1 クレジット消費します。
-- `companies().get(id)` はレコードを ETag とともに保持して再検証します。変更がなければキャッシュから返し、
-  `cacheInfo().notModified()` が true になります。独自の `ifNoneMatch` を渡した場合、304 は null を返します。
+- SDK は企業レコードをキャッシュしません。クレジットを節約するには、レコードを自分で保持し、`max-age`
+  （`cacheInfo().cacheControl()`）の間は再度呼び出さないでください。再検証するには ETag（`cacheInfo().etag()`）を
+  `ifNoneMatch` に渡します。変更がなければ null を返します。304 も 1 クレジット消費するため、節約できるのは
+  ダウンロードだけでクレジットではありません。記事には主要な企業フィールドがすでに含まれています。
 - リスト（`CompanyList`、`SourceList`、`ArticlePage.articles()`）は読めない要素をスキップして警告を記録し、
   インデックスと生の JSON を `skipped()` に残します。
 
@@ -329,7 +331,6 @@ FinlightClient client = new FinlightClient(config);
 | `burstWait` | 10 s, only without `Retry-After` |
 | `maxPages` | 10 |
 | `maxResponseBytes` | 32 MiB |
-| `companyCacheSize` | 256 (0 turns it off) |
 | `pingInterval` | 25 s |
 | `watchdogTimeout` | 60 s |
 | `rotationInterval` | 115 min |

@@ -199,7 +199,6 @@ class RulesRetryConfigLogTest {
     assertEquals(1000, c.dedupeCacheSize());
     assertEquals(32L * 1024 * 1024, c.maxMessageBytes());
     assertEquals(32L * 1024 * 1024, c.maxResponseBytes());
-    assertEquals(256, c.companyCacheSize());
     assertEquals(Duration.ofSeconds(30), c.connectTimeout());
     assertThrows(
         FinlightValidationException.class, () -> FinlightConfig.builder("k").maxMessageBytes(1024));

@@ -12,14 +12,15 @@ public final class CompanyGetOptions {
     this.ifNoneMatch = ifNoneMatch;
   }
 
-  /** No options: the SDK revalidates its own cached copy. */
+  /** No options: a plain request, no {@code If-None-Match}. */
   public static CompanyGetOptions none() {
     return NONE;
   }
 
   /**
-   * Conditional request with an ETag you kept ({@link CacheInfo#etag()}). When the record did not
-   * change, {@code companies().get} returns null.
+   * Conditional request with an ETag you kept ({@link CacheInfo#etag()}), sent as {@code
+   * If-None-Match}. When the record did not change, {@code companies().get} returns null. A 304
+   * costs 1 credit too.
    */
   public static CompanyGetOptions ifNoneMatch(String etag) {
     if (etag == null || etag.isEmpty()) {
