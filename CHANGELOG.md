@@ -36,7 +36,8 @@ section of the README and the full guide on [docs.finlight.me](https://docs.finl
 ### Added
 
 - `searchAll` with `maxPages` (default 10), page and `Stream` views, `nextCursor()` and `truncated()`.
-- Company lookups with ETag revalidation (`cacheInfo()`) and the source catalog.
+- Company lookups with ETag revalidation (`cacheInfo()`) and the source catalog. Each successful
+  lookup costs 1 credit (`getMany` 1 per request); a 304 revalidation and errors are free.
 - Search filters `sourceTypes` and `excludeSourceTypes` (strings or `SourceType`). `SourceType` knows
   `newswire`, `press_release`, `financial_media`, `general_media`, `aggregator`, `blog` and `government`;
   `source().type()` and `Source.type()` are null for an unclassified source.
@@ -73,5 +74,5 @@ section of the README and the full guide on [docs.finlight.me](https://docs.finl
 
 ### Contract
 
-- Built and tested against the finlight API v3 contract kit 3.0.0-rc.4, vendored in `conformance/`
+- Built and tested against the finlight API v3 contract kit 3.0.0-rc.5, vendored in `conformance/`
   (not published), 106 cases. Every kit case runs as its own test (`CONFORMANCE.md`).

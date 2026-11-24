@@ -133,6 +133,8 @@ SourceList sources = client.sources().list();
 
 - 見つからない場合は `NotFoundException` になります（404 は空の結果ではなくエラーです）。id 導入前に登録された記事はリンクでのみ参照できます。
 - 企業の参照には `entityAccess` 権限が必要です（ない場合は `ForbiddenException`）。
+- 企業とソースの参照は、成功したリクエストごとに月間クォータを 1 クレジット消費します（複数 ID の `getMany` も 1 リクエスト）。
+  304 による再検証とエラーは無料です。
 - `companies().get(id)` はレコードを ETag とともに保持して再検証します。変更がなければキャッシュから返し、
   `cacheInfo().notModified()` が true になります。独自の `ifNoneMatch` を渡した場合、304 は null を返します。
 - リスト（`CompanyList`、`SourceList`、`ArticlePage.articles()`）は読めない要素をスキップして警告を記録し、

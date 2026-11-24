@@ -136,6 +136,8 @@ SourceList sources = client.sources().list();
 - A miss throws `NotFoundException` (a 404 is an error, not an empty result). Articles indexed before
   ids existed are found by link only.
 - Company lookups need the `entityAccess` entitlement (`ForbiddenException` otherwise).
+- Every company and source lookup costs 1 credit of your monthly quota per successful request
+  (`getMany` with several ids too). A 304 revalidation and errors are free.
 - `companies().get(id)` keeps the record with its ETag and revalidates it; an unchanged record comes
   from the cache with `cacheInfo().notModified()` true. With your own `ifNoneMatch` a 304 returns null.
 - Lists (`CompanyList`, `SourceList`, `ArticlePage.articles()`) skip an entry that cannot be read, log a

@@ -283,7 +283,10 @@ public final class FinlightClient implements AutoCloseable {
     }
   }
 
-  /** Company lookups: {@code client.companies()}. They need {@code entityAccess}. */
+  /**
+   * Company lookups: {@code client.companies()}. They need {@code entityAccess}. Each successful
+   * request costs 1 credit of the monthly quota; a 304 revalidation and errors are free.
+   */
   public static final class Companies {
     private final FinlightClient client;
     private final Map<Long, CompanyRecord> cache;
@@ -303,7 +306,7 @@ public final class FinlightClient implements AutoCloseable {
               });
     }
 
-    /** Resolves a query to at most 10 companies. There are no pages. */
+    /** Resolves a query to at most 10 companies. There are no pages. Costs 1 credit. */
     public CompanyList search(CompanySearchParams params) {
       Objects.requireNonNull(params, "params");
       List<Map.Entry<String, String>> q = new ArrayList<>();
@@ -314,7 +317,10 @@ public final class FinlightClient implements AutoCloseable {
       return Envelopes.companies(Envelopes.parse(client.get("/v3/companies", q, Map.of()).body()));
     }
 
-    /** Resolves 1 to 10 company ids. Ids that do not exist are left out; order is not kept. */
+    /**
+     * Resolves 1 to 10 company ids. Ids that do not exist are left out; order is not kept. Costs 1
+     * credit per request, however many ids.
+     */
     public CompanyList getMany(Collection<Long> ids) {
       if (ids == null || ids.isEmpty() || ids.size() > 10) {
         throw new FinlightValidationException("ids", "ids takes 1 to 10 company ids");
@@ -342,7 +348,8 @@ public final class FinlightClient implements AutoCloseable {
 
     /**
      * One company. The SDK keeps the record with its ETag and revalidates it on the next call; an
-     * unchanged record (304) comes from the cache with {@link CacheInfo#notModified()} true.
+     * unchanged record (304) comes from the cache with {@link CacheInfo#notModified()} true. A 200
+     * costs 1 credit; a 304 revalidation is free.
      *
      * @throws NotFoundException when the id does not exist
      */
@@ -356,7 +363,8 @@ public final class FinlightClient implements AutoCloseable {
 
     /**
      * One company, with options. With {@link CompanyGetOptions#ifNoneMatch} an unchanged record
-     * returns null ("not modified"), never an error.
+     * returns null ("not modified"), never an error. A 200 costs 1 credit; a 304 revalidation is
+     * free.
      */
     public @Nullable CompanyRecord get(long companyId, CompanyGetOptions options) {
       if (companyId < 1) {
@@ -406,7 +414,10 @@ public final class FinlightClient implements AutoCloseable {
       this.client = client;
     }
 
-    /** Every source you can query, sorted by domain. Not metered. */
+    /**
+     * Every source you can query, sorted by domain. Costs 1 credit per successful request; errors
+     * are free.
+     */
     public SourceList list() {
       return Envelopes.sources(
           Envelopes.parse(client.get("/v3/sources", List.of(), Map.of()).body()));
