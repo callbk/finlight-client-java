@@ -19,7 +19,10 @@ public final class ArticleSource extends WireObject {
     return domain;
   }
 
-  /** The source type. Always null today. */
+  /**
+   * The source type when the article was indexed, or null when the source is not classified. It can
+   * lag {@link Source#type()} after a reclassification.
+   */
   public @Nullable SourceType type() {
     return type;
   }

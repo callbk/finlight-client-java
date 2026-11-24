@@ -72,6 +72,9 @@ class ConformanceVocabularyTest {
     assertEquals(
         values(v.at("/request/eventDirections/values")), expected.get(EventDirection.class));
     assertEquals(values(v.at("/request/minImportance/values")), expected.get(Importance.class));
+    assertEquals(values(v.at("/request/sourceTypes/values")), expected.get(SourceType.class));
+    assertEquals(
+        values(v.at("/request/excludeSourceTypes/values")), expected.get(SourceType.class));
 
     for (Map.Entry<Class<?>, List<String>> e : expected.entrySet()) {
       Class<?> type = e.getKey();

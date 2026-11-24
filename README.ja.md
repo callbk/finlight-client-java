@@ -85,6 +85,7 @@ SearchParams params = SearchParams.builder()
     .from(LocalDate.of(2026, 11, 1))          // or a String, Instant, OffsetDateTime
     .eventTypes(EventType.MNA)
     .minRelevance(0.5)
+    .sourceTypes(SourceType.NEWSWIRE, SourceType.FINANCIAL_MEDIA)
     .orderBy(OrderBy.AVAILABLE_AT)
     .include(IncludeBlock.CONTENT, IncludeBlock.COMPANIES, IncludeBlock.EVENTS)
     .limit(50)
@@ -92,6 +93,11 @@ SearchParams params = SearchParams.builder()
 ArticlePage page = client.articles().search(params);
 System.out.println(page.pagination().hasMore() + " " + page.pagination().nextCursor());
 ```
+
+`sourceTypes` と `excludeSourceTypes` はソースの種類（`SourceType`：`newswire`、`press_release`、`financial_media`、
+`general_media`、`aggregator`、`blog`、`government`）で絞り込みます。未分類のソースの記事は `sourceTypes` に一致せず、
+`excludeSourceTypes` では残ります。どちらもソースプールの中で絞り込むだけで、ソースを追加することはありません。
+未分類のソースでは `source().type()` と `Source.type()` は null です。
 
 `searchAll` はページを自動でたどります。呼び出し時にリクエスト本文を固定し、以降のページではカーソルだけを追加します。
 各ページがクォータを消費するため、`maxPages` ページ（既定 10）で停止します。

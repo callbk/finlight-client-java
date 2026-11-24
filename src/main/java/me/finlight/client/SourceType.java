@@ -6,12 +6,33 @@ import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Type of a source. The server sends none yet.
+ * Type of a source, also a value of {@code sourceTypes} and {@code excludeSourceTypes}.
  *
  * <p>Open vocabulary (R-ENUMS-1): a string plus constants for the values known today. Values this
  * version does not know are kept as sent. Compare with {@link #equals} or by {@link #value()}.
  */
 public final class SourceType {
+  /** {@code newswire} */
+  public static final SourceType NEWSWIRE = new SourceType(SourceTypeValues.NEWSWIRE);
+
+  /** {@code press_release} */
+  public static final SourceType PRESS_RELEASE = new SourceType(SourceTypeValues.PRESS_RELEASE);
+
+  /** {@code financial_media} */
+  public static final SourceType FINANCIAL_MEDIA = new SourceType(SourceTypeValues.FINANCIAL_MEDIA);
+
+  /** {@code general_media} */
+  public static final SourceType GENERAL_MEDIA = new SourceType(SourceTypeValues.GENERAL_MEDIA);
+
+  /** {@code aggregator} */
+  public static final SourceType AGGREGATOR = new SourceType(SourceTypeValues.AGGREGATOR);
+
+  /** {@code blog} */
+  public static final SourceType BLOG = new SourceType(SourceTypeValues.BLOG);
+
+  /** {@code government} */
+  public static final SourceType GOVERNMENT = new SourceType(SourceTypeValues.GOVERNMENT);
+
   private final String value;
 
   private SourceType(String value) {
@@ -22,6 +43,20 @@ public final class SourceType {
   public static SourceType of(String value) {
     Objects.requireNonNull(value, "value");
     switch (value) {
+      case SourceTypeValues.NEWSWIRE:
+        return NEWSWIRE;
+      case SourceTypeValues.PRESS_RELEASE:
+        return PRESS_RELEASE;
+      case SourceTypeValues.FINANCIAL_MEDIA:
+        return FINANCIAL_MEDIA;
+      case SourceTypeValues.GENERAL_MEDIA:
+        return GENERAL_MEDIA;
+      case SourceTypeValues.AGGREGATOR:
+        return AGGREGATOR;
+      case SourceTypeValues.BLOG:
+        return BLOG;
+      case SourceTypeValues.GOVERNMENT:
+        return GOVERNMENT;
       default:
         return new SourceType(value);
     }

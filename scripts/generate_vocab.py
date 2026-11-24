@@ -23,7 +23,7 @@ TYPES = [
     ("EventDirection", vocab["response"]["eventDirections"]["values"], "Direction of a tagged event.", {}),
     ("Importance", vocab["response"]["importance"]["values"], "Importance of a tagged event, from low to critical.", {}),
     ("SentimentLabel", vocab["response"]["sentimentLabels"]["values"], "Sentiment label of an article.", {}),
-    ("SourceType", vocab["response"]["sourceTypes"]["values"], "Type of a source. The server sends none yet.", {}),
+    ("SourceType", vocab["response"]["sourceTypes"]["values"], "Type of a source, also a value of {@code sourceTypes} and {@code excludeSourceTypes}.", {}),
     ("StreamEventName", vocab["websocket"]["events"]["values"], "Name of a WebSocket frame ({@code event}).",
      {"ARTICLE_EVENTS": vocab["websocket"]["articleEvents"]["values"],
       "CONNECTION_EVENTS": vocab["websocket"]["connectionEvents"]["values"]}),

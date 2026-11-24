@@ -51,6 +51,11 @@ REST 호출은 호출한 스레드를 블록합니다. 빌더의 각 메서드�
 
 <<CODE 4>>
 
+`sourceTypes`와 `excludeSourceTypes`는 소스 유형(`SourceType`: `newswire`, `press_release`, `financial_media`,
+`general_media`, `aggregator`, `blog`, `government`)으로 거릅니다. 분류되지 않은 소스의 기사는 `sourceTypes`에 걸리지 않고
+`excludeSourceTypes`에서는 남습니다. 둘 다 소스 풀 안에서만 거르며 소스를 추가하지 않습니다.
+분류되지 않은 소스에서는 `source().type()`과 `Source.type()`이 null입니다.
+
 `searchAll`은 페이지를 자동으로 넘깁니다. 호출 시점에 요청 본문을 고정하고 이후 페이지에서는 커서만 추가합니다.
 페이지마다 할당량을 쓰므로 `maxPages` 페이지(기본 10)에서 멈춥니다.
 

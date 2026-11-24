@@ -65,6 +65,8 @@ class RulesScopeAndNamesTest {
             .sources("a")
             .optInSources("b")
             .excludeSources("c")
+            .sourceTypes(SourceType.NEWSWIRE)
+            .excludeSourceTypes("press_release")
             .from(Instant.EPOCH)
             .to("2026-01-01")
             .languages("en")

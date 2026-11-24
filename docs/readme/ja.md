@@ -52,6 +52,11 @@ REST 呼び出しは呼び出し元スレッドをブロックします。ビル
 
 <<CODE 4>>
 
+`sourceTypes` と `excludeSourceTypes` はソースの種類（`SourceType`：`newswire`、`press_release`、`financial_media`、
+`general_media`、`aggregator`、`blog`、`government`）で絞り込みます。未分類のソースの記事は `sourceTypes` に一致せず、
+`excludeSourceTypes` では残ります。どちらもソースプールの中で絞り込むだけで、ソースを追加することはありません。
+未分類のソースでは `source().type()` と `Source.type()` は null です。
+
 `searchAll` はページを自動でたどります。呼び出し時にリクエスト本文を固定し、以降のページではカーソルだけを追加します。
 各ページがクォータを消費するため、`maxPages` ページ（既定 10）で停止します。
 

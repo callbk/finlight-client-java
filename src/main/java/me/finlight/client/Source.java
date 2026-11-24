@@ -41,12 +41,12 @@ public final class Source extends WireObject {
     return domain;
   }
 
-  /** Display name, or null until the catalog is curated. */
+  /** Display name, or null. */
   public @Nullable String name() {
     return name;
   }
 
-  /** Source type, or null. */
+  /** Source type, or null when the source is not classified. */
   public @Nullable SourceType type() {
     return type;
   }

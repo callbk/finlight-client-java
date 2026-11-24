@@ -85,6 +85,7 @@ SearchParams params = SearchParams.builder()
     .from(LocalDate.of(2026, 11, 1))          // or a String, Instant, OffsetDateTime
     .eventTypes(EventType.MNA)
     .minRelevance(0.5)
+    .sourceTypes(SourceType.NEWSWIRE, SourceType.FINANCIAL_MEDIA)
     .orderBy(OrderBy.AVAILABLE_AT)
     .include(IncludeBlock.CONTENT, IncludeBlock.COMPANIES, IncludeBlock.EVENTS)
     .limit(50)
@@ -92,6 +93,12 @@ SearchParams params = SearchParams.builder()
 ArticlePage page = client.articles().search(params);
 System.out.println(page.pagination().hasMore() + " " + page.pagination().nextCursor());
 ```
+
+`sourceTypes` and `excludeSourceTypes` filter by the type of the source (`SourceType`: `newswire`,
+`press_release`, `financial_media`, `general_media`, `aggregator`, `blog`, `government`). Articles of
+an unclassified source never match `sourceTypes` and are kept by `excludeSourceTypes`. Both filter
+inside your source pool and never add a source to it. `source().type()` and `Source.type()` are null
+for an unclassified source.
 
 `searchAll` walks the pages for you. It freezes the request body when you call it and only adds the
 cursor on later pages. It stops after `maxPages` pages (default 10), because every page costs quota.

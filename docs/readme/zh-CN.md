@@ -51,6 +51,10 @@ REST 调用会阻塞当前线程。每个 Builder 方法对应一个 API 键名�
 
 <<CODE 4>>
 
+`sourceTypes` 和 `excludeSourceTypes` 按来源类型过滤（`SourceType`：`newswire`、`press_release`、`financial_media`、
+`general_media`、`aggregator`、`blog`、`government`）。未分类来源的文章不会匹配 `sourceTypes`，在 `excludeSourceTypes` 下则会保留。
+两者都只在你的来源池内过滤，不会添加来源。未分类来源的 `source().type()` 和 `Source.type()` 为 null。
+
 `searchAll` 会自动翻页。调用时请求体即被冻结，之后的页只追加 cursor。为节省配额，最多翻 `maxPages` 页（默认 10）。
 
 <<CODE 5>>

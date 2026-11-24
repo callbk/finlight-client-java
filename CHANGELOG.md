@@ -37,6 +37,9 @@ section of the README and the full guide on [docs.finlight.me](https://docs.finl
 
 - `searchAll` with `maxPages` (default 10), page and `Stream` views, `nextCursor()` and `truncated()`.
 - Company lookups with ETag revalidation (`cacheInfo()`) and the source catalog.
+- Search filters `sourceTypes` and `excludeSourceTypes` (strings or `SourceType`). `SourceType` knows
+  `newswire`, `press_release`, `financial_media`, `general_media`, `aggregator`, `blog` and `government`;
+  `source().type()` and `Source.type()` are null for an unclassified source.
 - One error model: `FinlightApiException` with `status`, `code`, `type`, `title`, `detail`,
   `requestId`, `errors`, `apiKind`, `raw` and one subclass per code (`NotFoundException`,
   `RateLimitedException` with `limitType` and `retryAfter`, ...), plus `FinlightValidationException`,
@@ -67,5 +70,5 @@ section of the README and the full guide on [docs.finlight.me](https://docs.finl
 
 ### Contract
 
-- Built and tested against the finlight API v3 contract kit 3.0.0-rc.3, vendored in `conformance/`
+- Built and tested against the finlight API v3 contract kit 3.0.0-rc.4, vendored in `conformance/`
   (not published). Every kit case runs as its own test (`CONFORMANCE.md`).
