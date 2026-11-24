@@ -284,8 +284,9 @@ public final class FinlightClient implements AutoCloseable {
   }
 
   /**
-   * Company lookups: {@code client.companies()}. They need {@code entityAccess}. Each successful
-   * request costs 1 credit of the monthly quota; a 304 revalidation and errors are free.
+   * Company lookups: {@code client.companies()}. They need {@code entityAccess}. Each request costs
+   * 1 credit of the monthly quota, like an article request; a 304 revalidation and errors cost 1
+   * credit too.
    */
   public static final class Companies {
     private final FinlightClient client;
@@ -348,8 +349,8 @@ public final class FinlightClient implements AutoCloseable {
 
     /**
      * One company. The SDK keeps the record with its ETag and revalidates it on the next call; an
-     * unchanged record (304) comes from the cache with {@link CacheInfo#notModified()} true. A 200
-     * costs 1 credit; a 304 revalidation is free.
+     * unchanged record (304) comes from the cache with {@link CacheInfo#notModified()} true. Every
+     * call costs 1 credit, a 304 revalidation included.
      *
      * @throws NotFoundException when the id does not exist
      */
@@ -415,8 +416,7 @@ public final class FinlightClient implements AutoCloseable {
     }
 
     /**
-     * Every source you can query, sorted by domain. Costs 1 credit per successful request; errors
-     * are free.
+     * Every source you can query, sorted by domain. Costs 1 credit per request, errors included.
      */
     public SourceList list() {
       return Envelopes.sources(

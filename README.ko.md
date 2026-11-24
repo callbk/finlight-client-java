@@ -132,8 +132,8 @@ SourceList sources = client.sources().list();
 
 - 찾지 못하면 `NotFoundException`이 발생합니다(404는 빈 결과가 아니라 오류입니다). id 도입 전에 색인된 기사는 링크로만 조회됩니다.
 - 기업 조회에는 `entityAccess` 권한이 필요합니다(없으면 `ForbiddenException`).
-- 기업 및 소스 조회는 성공한 요청마다 월간 할당량에서 1 크레딧을 씁니다(ID가 여러 개인 `getMany`도 요청 1건).
-  304 재검증과 오류는 무료입니다.
+- 기업 및 소스 조회는 기사 요청처럼 요청마다 월간 할당량에서 1 크레딧을 씁니다(ID가 여러 개인 `getMany`도 요청 1건).
+  304 재검증과 오류도 1 크레딧을 씁니다.
 - `companies().get(id)`는 레코드를 ETag와 함께 보관하고 재검증합니다. 바뀌지 않았으면 캐시에서 반환하며
   `cacheInfo().notModified()`가 true입니다. 직접 `ifNoneMatch`를 주면 304는 null을 반환합니다.
 - 목록(`CompanyList`, `SourceList`, `ArticlePage.articles()`)은 읽을 수 없는 항목을 건너뛰고 경고를 남기며,

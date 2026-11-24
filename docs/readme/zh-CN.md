@@ -69,8 +69,8 @@ REST 调用会阻塞当前线程。每个 Builder 方法对应一个 API 键名�
 
 - 查不到时抛出 `NotFoundException`（404 是错误，不是空结果）。在 id 推出之前收录的文章只能通过链接查询。
 - 公司查询需要 `entityAccess` 权限（否则为 `ForbiddenException`）。
-- 公司和来源查询每个成功请求消耗月度配额 1 个额度（含多个 ID 的 `getMany` 也算 1 个请求）。
-  304 重新验证和错误不计费。
+- 公司和来源查询与文章请求一样，每个请求消耗月度配额 1 个额度（含多个 ID 的 `getMany` 也算 1 个请求）。
+  304 重新验证和错误也消耗 1 个额度。
 - `companies().get(id)` 会缓存记录及其 ETag 并重新验证；未变化时从缓存返回，`cacheInfo().notModified()` 为 true。
   使用自己的 `ifNoneMatch` 时，304 返回 null。
 - 列表（`CompanyList`、`SourceList`、`ArticlePage.articles()`）会跳过无法读取的条目，记录警告，并将其索引与原始 JSON
