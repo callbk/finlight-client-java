@@ -364,8 +364,8 @@ public final class FinlightClient implements AutoCloseable {
 
     /**
      * One company, with options. With {@link CompanyGetOptions#ifNoneMatch} an unchanged record
-     * returns null ("not modified"), never an error. A 200 costs 1 credit; a 304 revalidation is
-     * free.
+     * returns null ("not modified"), never an error. Every call costs 1 credit, a 304 revalidation
+     * included.
      */
     public @Nullable CompanyRecord get(long companyId, CompanyGetOptions options) {
       if (companyId < 1) {
