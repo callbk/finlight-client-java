@@ -1,24 +1,34 @@
-# finlight-client (JVM)
+# finlight Java 与 Kotlin 客户端
 
 *[English](README.md) | 简体中文 | [日本語](README.ja.md) | [한국어](README.ko.md)*
 
-[![Maven Central](https://img.shields.io/maven-central/v/me.finlight/finlight-client)](https://central.sonatype.com/artifact/me.finlight/finlight-client)
-[![JitPack](https://jitpack.io/v/callbk/finlight-client-java.svg)](https://jitpack.io/#callbk/finlight-client-java)
-[![CI](https://github.com/callbk/finlight-client-java/actions/workflows/test.yml/badge.svg)](https://github.com/callbk/finlight-client-java/actions/workflows/test.yml)
+> 本译文根据英文版 README 编写，内容可能稍有滞后；如有出入，以 [README.md](README.md) 为准。
 
-[finlight.me](https://finlight.me) API 的官方 JVM 客户端 —— 提供带情感分析、实体识别和实时流式推送的财经新闻。使用 Java 17 编写，并针对 Kotlin 互操作做了一流设计（JSpecify null-marked API、不可变 record、builder）。
+> **不兼容的大版本。** 1.0.0 只支持 finlight API v3。为 0.1.x 编写的代码无法在 1.x 上编译。若要继续使用
+> API v2，请保留 `me.finlight:finlight-client:0.1.0`；0.1.x 不再发布新版本。详见
+> [从 0.1.x 迁移](README.md#migrating-from-01x)。
 
-📚 **完整 API 文档：[docs.finlight.me](https://docs.finlight.me)**
+[finlight](https://finlight.me) 新闻 API 的 JVM 客户端：通过 REST 搜索和查询财经新闻、公司与来源，通过 WebSocket
+实时接收文章，并验证 Webhook。以 Java 17 编写；Kotlin 使用同一套 API（JSpecify 空值注解、Builder、sealed 类型）。
 
-## 功能特性
+## 版本
 
-- **REST API**：检索文章、按链接获取单篇文章、列出新闻源
-- **实时流式推送**：通过 WebSocket 提供 enhanced 和 raw 两种文章流
-- **默认具备韧性**：请求失败按指数退避重试；WebSocket 自动重连、带 pong 看门狗的保活、主动连接轮换，以及速率限制处理
-- **支持 Webhook**：HMAC-SHA256 签名验证，含重放防护
-- **依赖极少**：JSON 使用 Jackson，日志使用 SLF4J（自行提供 binding），HTTP/WebSocket 使用 JDK 内置客户端
+| SDK version | API version | Status |
+|---|---|---|
+| 1.x | v3 (REST `/v3`, WebSocket `payloadVersion` 3, v3 webhooks) | current |
+| 0.1.x | v2 | no further releases |
 
-需要 Java 17 及以上版本。
+SDK 版本与 API 版本相互独立：服务端新增的字段和取值会以兼容的 1.x 版本发布。其他支持 API v3 的 finlight SDK：
+TypeScript 4.x、Python 3.x、PHP 2.x、Go 模块 `/v2`、.NET 2.x、Java 1.x、Ruby 1.x、Rust 0.2。
+
+## 运行要求
+
+- Java 17 及以上（在 17 和 21 上测试）
+- Jackson `jackson-databind` 2.13.5 及以上（以 2.13.5 和 2.18.3 测试）。发布的 POM 以 2.13.5 为下限，且不导入 Jackson BOM，
+  你的构建保留自己的 Jackson 版本。
+- JSpecify 1.0（仅注解）
+
+REST 与 WebSocket 使用 JDK 自带的 `java.net.http` 客户端，没有其他运行时依赖。
 
 ## 安装
 
@@ -26,7 +36,7 @@ Gradle（Kotlin DSL）：
 
 ```kotlin
 dependencies {
-    implementation("me.finlight:finlight-client:0.1.0")
+    implementation("me.finlight:finlight-client:1.0.0")
 }
 ```
 
@@ -34,198 +44,358 @@ Maven：
 
 ```xml
 <dependency>
-    <groupId>me.finlight</groupId>
-    <artifactId>finlight-client</artifactId>
-    <version>0.1.0</version>
+  <groupId>me.finlight</groupId>
+  <artifactId>finlight-client</artifactId>
+  <version>1.0.0</version>
 </dependency>
-```
-
-也可以通过 [JitPack](https://jitpack.io/#callbk/finlight-client-java) 直接从 GitHub tag 构建：
-
-```kotlin
-repositories {
-    maven("https://jitpack.io")
-}
-
-dependencies {
-    implementation("com.github.callbk:finlight-client-java:v0.1.0")
-}
 ```
 
 ## 快速开始
 
-### Java
-
 ```java
-import me.finlight.client.FinlightClient;
-import me.finlight.client.model.ArticleResponse;
-import me.finlight.client.model.GetArticlesParams;
+import me.finlight.client.*;
 
-FinlightClient client = FinlightClient.create(System.getenv("FINLIGHT_API_KEY"));
-
-ArticleResponse response = client.articles().fetchArticles(
-    GetArticlesParams.builder()
-        .query("nvidia")
-        .pageSize(10)
-        .build());
-
-response.articles().forEach(article ->
-    System.out.printf("[%s] %s%n", article.source(), article.title()));
-```
-
-### Kotlin
-
-```kotlin
-import me.finlight.client.FinlightClient
-import me.finlight.client.model.GetArticlesParams
-
-val client = FinlightClient.create(System.getenv("FINLIGHT_API_KEY"))
-
-val response = client.articles().fetchArticles(
-    GetArticlesParams.builder()
-        .query("nvidia")
-        .pageSize(10)
-        .build()
-)
-
-response.articles().forEach { println("[${it.source()}] ${it.title()}") }
-```
-
-## REST API
-
-### 检索文章
-
-完整的 `query` 语法参见[查询语言参考](https://docs.finlight.me)。
-
-```java
-ArticleResponse response = client.articles().fetchArticles(
-    GetArticlesParams.builder()
-        .query("(ticker:AAPL OR ticker:NVDA) AND \"Elon Musk\"")
-        .tickers(List.of("AAPL", "NVDA"))
-        .from("2025-01-01")
-        .includeContent(true)
-        .includeEntities(true)
-        .orderBy(OrderBy.PUBLISH_DATE)
-        .order(SortOrder.DESC)
-        .pageSize(20)
-        .build());
-```
-
-### 按链接获取单篇文章
-
-```java
-Article article = client.articles().fetchArticleByLink(
-    GetArticleByLinkParams.builder("https://www.reuters.com/technology/example")
-        .includeContent(true)
-        .build());
-```
-
-### 列出新闻源
-
-```java
-List<Source> sources = client.sources().getSources();
-```
-
-## 实时流式推送
-
-`connect` 会阻塞并自动重连，直到你调用 `stop()`；使用 `connectAsync` 可将其运行在后台线程中。enhanced 流推送带情感和实体的文章；raw 流（`client.rawWebSocket()`）以最低延迟推送未经增强的文章。
-
-```java
-FinlightClient client = FinlightClient.create(apiKey);
-
-client.webSocket().connect(
-    GetArticlesWebSocketParams.builder()
-        .tickers(List.of("AAPL", "NVDA"))
-        .includeContent(true)
-        .build(),
-    article -> System.out.println(article.title()));
-```
-
-自定义流选项：
-
-```java
-FinlightClient client = FinlightClient.create(
-    FinlightConfig.of(apiKey),
-    WebSocketOptions.builder()
-        .takeover(true) // 接管同一密钥下已有的连接
-        .onClose((code, reason) -> System.out.println("closed: " + code))
-        .build());
-```
-
-若服务端永久拒绝该连接（关闭码 1008），`connect` 会抛出 `FinlightBlockedException` —— 此时重连无济于事，请联系支持。
-
-## Webhook
-
-使用原始（未解析的）请求体验证收到的 Webhook：
-
-```java
-import me.finlight.client.WebhookService;
-import me.finlight.client.WebhookVerificationException;
-
-// 例如在 Spring controller 中
-@PostMapping("/webhook")
-public ResponseEntity<Void> onWebhook(
-    @RequestBody String rawBody,
-    @RequestHeader("X-Webhook-Signature") String signature,
-    @RequestHeader(value = "X-Webhook-Timestamp", required = false) String timestamp) {
-  try {
-    Article article = WebhookService.constructEvent(rawBody, signature, webhookSecret, timestamp);
-    log.info("New article: {}", article.title());
-    return ResponseEntity.ok().build();
-  } catch (WebhookVerificationException e) {
-    return ResponseEntity.badRequest().build();
+try (FinlightClient client = new FinlightClient(System.getenv("FINLIGHT_API_KEY"))) {
+  ArticlePage page = client.articles().search(
+      SearchParams.builder().query("ticker:NVDA").limit(10).build());
+  for (Article a : page.articles()) {
+    System.out.println(a.publishedAt() + " " + a.title());
   }
 }
 ```
 
-## 配置
+Kotlin：
 
-| 选项         | 默认值                    | 说明                                            |
-| ------------ | ------------------------- | ----------------------------------------------- |
-| `baseUrl`    | `https://api.finlight.me` | REST 接口地址                                   |
-| `wssUrl`     | `wss://wss.finlight.me`   | WebSocket 接口地址                              |
-| `timeout`    | 5s                        | 单次请求和连接超时                              |
-| `retryCount` | 3                         | 可重试失败（429/5xx）的总尝试次数               |
-| `httpClient` | 内置                      | 自定义 `java.net.http.HttpClient`（例如走代理） |
-
-```java
-FinlightClient client = FinlightClient.create(
-    FinlightConfig.builder(apiKey)
-        .timeout(Duration.ofSeconds(10))
-        .retryCount(5)
-        .build());
+```kotlin
+FinlightClient(System.getenv("FINLIGHT_API_KEY")).use { client ->
+    val page = client.articles().search(SearchParams.builder().query("ticker:NVDA").limit(10).build())
+    page.articles().forEach { println("${it.publishedAt()} ${it.title()}") }
+}
 ```
 
-日志通过 [SLF4J](https://www.slf4j.org/) 输出；添加一个 binding（Logback、`slf4j-simple` 等）即可看到客户端日志，logger 命名空间为 `me.finlight.client`。
+REST 调用会阻塞当前线程。每个 Builder 方法对应一个 API 键名；只发送你设置过的键。
+
+## 搜索文章
+
+```java
+SearchParams params = SearchParams.builder()
+    .query("eventType:mna AND companyCountry:US")
+    .languages("en", "de")
+    .from(LocalDate.of(2026, 11, 1))          // or a String, Instant, OffsetDateTime
+    .eventTypes(EventType.MNA)
+    .minRelevance(0.5)
+    .sourceTypes(SourceType.NEWSWIRE, SourceType.FINANCIAL_MEDIA)
+    .orderBy(OrderBy.AVAILABLE_AT)
+    .include(IncludeBlock.CONTENT, IncludeBlock.COMPANIES, IncludeBlock.EVENTS)
+    .limit(50)
+    .build();
+ArticlePage page = client.articles().search(params);
+System.out.println(page.pagination().hasMore() + " " + page.pagination().nextCursor());
+```
+
+`sourceTypes` 和 `excludeSourceTypes` 按来源类型过滤（`SourceType`：`newswire`、`press_release`、`financial_media`、
+`general_media`、`aggregator`、`blog`、`government`）。未分类来源的文章不会匹配 `sourceTypes`，在 `excludeSourceTypes` 下则会保留。
+两者都只在你的来源池内过滤，不会添加来源。未分类来源的 `source().type()` 和 `Source.type()` 为 null。
+
+`searchAll` 会自动翻页。调用时请求体即被冻结，之后的页只追加 cursor。为节省配额，最多翻 `maxPages` 页（默认 10）。
+
+```java
+SearchAllResult all = client.articles().searchAll(params, SearchAllOptions.maxPages(5));
+for (Article a : all) {                     // or all.pages(), or all.stream()
+  System.out.println(a.id() + " " + a.title());
+}
+if (all.truncated()) {
+  SearchParams next = params.withCursor(all.nextCursor());   // continue later
+}
+```
+
+结果只能遍历一次。形状错误（例如 `limit(0)` 或空的 `languages`）在发送前抛出 `FinlightValidationException`；
+未知的键无法通过编译。词表取值不在本地校验，因此服务端的新取值无需升级 SDK。日期以带毫秒的 UTC 发送
+（`2026-11-01T00:00:00.000Z`），纯日期为 `YYYY-MM-DD`，字符串原样发送。
+
+## 查询文章、公司和来源
+
+```java
+Article a = client.articles().get("EU8JwpsZ8iJehuyPZjMqRz", LookupOptions.include(IncludeBlock.CONTENT));
+Article b = client.articles().getByLink("https://www.reuters.com/...");
+
+CompanyList found = client.companies().search(CompanySearchParams.of("NVDA", "XNAS")); // at most 10
+CompanyList many = client.companies().getMany(4821L, 1001L);
+CompanyRecord nvda = client.companies().get(4821);       // every call is a request (1 credit)
+String etag = nvda.cacheInfo().etag();
+CompanyRecord changed = client.companies().get(4821, CompanyGetOptions.ifNoneMatch(etag)); // null: not modified
+
+SourceList sources = client.sources().list();
+```
+
+- 查不到时抛出 `NotFoundException`（404 是错误，不是空结果）。在 id 推出之前收录的文章只能通过链接查询。
+- 公司查询需要 `entityAccess` 权限（否则为 `ForbiddenException`）。
+- 公司和来源查询与文章请求一样，每个请求消耗月度配额 1 个额度（含多个 ID 的 `getMany` 也算 1 个请求）。
+  304 重新验证和错误也消耗 1 个额度。
+- SDK 不缓存公司记录。想节省额度，请自行保存记录，并在 `max-age`（`cacheInfo().cacheControl()`）内不再调用。
+  重新验证时把 ETag（`cacheInfo().etag()`）作为 `ifNoneMatch` 传入；未变化时返回 null。304 也消耗 1 个额度，
+  所以节省的是下载，而不是额度。文章中已包含主要的公司字段。
+- 列表（`CompanyList`、`SourceList`、`ArticlePage.articles()`）会跳过无法读取的条目，记录警告，并将其索引与原始 JSON
+  保存在 `skipped()` 中。
+
+## 缺失、null 与空
+
+取决于套餐或 `include` 的键有三种状态，由 `Gated<T>` 表示：
+
+| State | Meaning | `Gated` |
+|---|---|---|
+| absent | not requested, not entitled, or a raw article | `Gated.Absent` |
+| null | requested and entitled, but no value | `Gated.Present` with `value() == null` |
+| value | the value | `Gated.Present` |
+
+```java
+if (a.contentPresent()) {               // the key was sent, maybe as null
+  String text = a.content().value();    // null means "no text for this article"
+}
+if (a.companiesPresent()) {
+  List<Company> cs = a.companies().value();   // [] means "tagged, no company found"
+}
+switch (a.sentiment()) {                // Java 21 pattern matching; Kotlin: when (val s = a.sentiment())
+  case Gated.Present<Sentiment> p -> System.out.println(p.value());
+  case Gated.Absent<Sentiment> x -> System.out.println("not in your plan");
+}
+```
+
+`content` 与 `sentiment` 可以是缺失、null 或有值。`companies`、`events`、`events[].companyIds` 与 `Source.hasContent`
+要么缺失要么有值（`[]` 也是值）。只有同一负载中包含 `companies` 时才会发送 `companyIds`。缺失永远不会被转换为 `[]`、
+`false` 或 `0`。
+
+时间戳保持原始字符串（`publishedAt()`）；`publishedAtTime()` 等 `*Time()` 方法按 RFC 3339 严格解析，无法读取时返回 null。
+新版服务端的未知键会被忽略；`Article`、`CompanyRecord`、`Source`、`StreamEvent`、`WebhookEvent` 和 API 错误上的
+`rawJson()` 返回收到的 JSON。词表取值是开放的：请与常量比较（`CompanyRole.ACQUIRER`，在 `switch` 中用
+`EventTypeValues.MNA`），未知取值原样保留。
+
+## 实时流
+
+```java
+StreamParams params = StreamParams.builder()
+    .query("ticker:NVDA")
+    .language("en")
+    .include(IncludeBlock.COMPANIES, IncludeBlock.EVENTS)
+    .sourceTypes(SourceType.NEWSWIRE, SourceType.PRESS_RELEASE)
+    .includeUpdates(true)
+    .build();
+FinlightStream stream = client.stream(params, new StreamListener() {
+  @Override public void onEvent(StreamEvent e) {
+    if (e instanceof StreamEvent.Created c) System.out.println("new: " + c.data().title());
+    else if (e instanceof StreamEvent.Updated u) System.out.println("updated: " + u.data().title());
+    // StreamEvent.Other: an event this SDK version does not know
+  }
+  @Override public void onReconnect(ReconnectInfo info) {
+    System.out.println("reconnected (" + info.reason() + "), last seen " + info.lastSeenAt());
+  }
+  @Override public void onError(FinlightException error) { System.err.println(error.getMessage()); }
+  @Override public void onClosed(FinlightException terminal) { /* null after close() */ }
+});
+// ... later
+stream.close();
+```
+
+Kotlin 可以为 `onEvent` 传入 lambda：`client.stream(params) { e -> println(e.event()) }`。
+
+- `client.rawStream(RawStreamParams, listener)` 推送未经增强的文章（`<wssUrl>/raw`）：没有 `include`、content、
+  sentiment、companies 或 events，`availableAt` 始终为 null。
+- `sourceTypes` 和 `excludeSourceTypes` 在两种流上的作用与搜索相同。只有在你设置时 SDK 才会发送。
+  服务器不认识的值会以 `ValidationFailedException` 结束流（字段 `sourceTypes`，允许的值在 `errors()` 中）。
+- 监听器方法按顺序在流的一个守护线程上运行。慢速监听器不会触发保活超时；其中的异常会被记录，流继续运行。
+  `close()` 之后不再收到事件；最后调用 `onClosed`。`stream.awaitTermination()` 会阻塞到结束。
+- 流每 25 秒发送 ping，60 秒内无 pong 则替换连接，115 分钟后更新连接，每次重连后发送相同的订阅。重复项会被丢弃；
+  同一文章的 `article.created` 与 `article.updated` 是两个事件。
+- SDK 不会自动补数据。`onReconnect` 提供你最后看到的 `availableAt`（raw：`firstSeenAt`）。如需补齐，请从该时间起以
+  `orderBy` `availableAt`（raw：`firstSeenAt`）调用 `searchAll`。
+- 终止性问题通过 `onClosed(terminal)` 结束流：无效密钥（`UnauthorizedException`）、无 WebSocket 权限
+  （`ForbiddenException`）、订阅被拒（`ValidationFailedException`），以及其他连接接管时原因为 `connection_limit` 的
+  `PreemptedException`。其他问题会重连并交给 `onError`。
+- 当月 WebSocket 配额用尽（连接以 "quota exceeded" 被拒，或 `PreemptedException` 原因为 `quota_exceeded`）时，流不会结束：
+  每小时重试一次，直到配额允许。每次等待都会记录警告并调用 `onQuotaWait`。设置 `quotaReconnect(false)` 则以错误结束流；
+  `quotaReconnectInterval` 可修改间隔。
+
+需要了解的限制：
+
+- 套餐的连接数上限由增强流、raw 流和旧版 SDK 连接共享。达到上限时连接被拒，SDK 在 60 秒后重试。
+  `StreamOptions.takeover(true)` 会改为替换你最久未活动的连接。
+- 每次订阅后，服务端会先发送一次最新的匹配文章，它可能是旧文章。
+- 网关在 2 小时后结束每个连接；SDK 会提前更新。
+- 超过 32,000 字节的实时帧会被服务端静默丢弃。对长文章使用 content 时可能发生。请用 `articles().get(id)` 获取。
+- `connection.admitted`（`onAdmitted`）在服务端检查订阅之前到达，并不代表订阅已被接受。
+
+## Webhook
+
+finlight 会对每个 Webhook 签名。请在任何框架解析之前，用**原始**请求体验证：
+
+```java
+WebhookPayload payload;
+try {
+  payload = Webhooks.constructEvent(rawBodyBytes, headers, System.getenv("FINLIGHT_WEBHOOK_SECRET"));
+} catch (WebhookVerificationException e) {
+  return 400;                                   // never 410
+}
+if (payload instanceof WrongPayloadVersion old) {
+  keepForLater(old.raw());                      // an old v2 body: answer 2xx anyway
+  return 204;
+}
+WebhookEvent event = (WebhookEvent) payload;
+if (alreadySeen(event.eventId())) return 204;   // deliveries can repeat
+queue(event);                                   // answer within 5 s, work afterwards
+return 204;
+```
+
+- `headers` 可以是任何 `Map<String, ?>`，值为字符串、集合或数组（Servlet、Spring、JDK
+  `HttpExchange.getRequestHeaders()`）。名称不区分大小写。重载 `constructEvent(body, signature, timestamp, secret)`
+  直接接收两个请求头的值；`verifySignature` 只做校验。
+- 时间戳必须在双向 300 秒（`WebhookVerifyOptions.tolerance`）以内。
+- 仪表盘测试 Webhook 的 `event.isTest()` 为 true，不受套餐裁剪。
+- 永远不要返回 410：它会立即停用 Webhook。连续 10 次非 2xx 也会停用。
+
+获取原始请求体：
+
+| Framework | Raw body |
+|---|---|
+| JDK `HttpServer` | `exchange.getRequestBody().readAllBytes()` |
+| Servlet | `request.getInputStream().readAllBytes()` |
+| Spring MVC | `@RequestBody byte[] body` |
+| Ktor | `call.receive<ByteArray>()` |
+
+将 Webhook 切换到 v3：先部署本 SDK；对 `WrongPayloadVersion` 返回 2xx 并保留其 `raw()`；然后在仪表盘中将 Webhook 切换到
+`payloadVersion` 3；再等待约 2 小时，因为切换前排队的重试仍会以旧格式送达。
+
+## 错误与重试
+
+所有错误都继承 `FinlightException`（`RuntimeException`），并提供 `kind()`：
+
+```text
+FinlightException                kind: api, validation, network, timeout, decode, webhook_verification, preempted
+├── FinlightApiException         status, code, type, title, detail, requestId, errors, apiKind, raw
+│   ├── ValidationFailedException
+│   ├── CursorInvalidException
+│   ├── CursorMismatchException
+│   ├── UnauthorizedException
+│   ├── ForbiddenException
+│   ├── NotFoundException
+│   ├── RateLimitedException     limitType (monthly, burst, unknown or newer), retryAfter
+│   └── InternalServerException
+├── FinlightValidationException  param; thrown before any request
+├── FinlightNetworkException     the transport error is getCause()
+│   └── FinlightTimeoutException
+├── FinlightDecodeException      path, raw
+├── WebhookVerificationException reason
+└── PreemptedException           reason, newLeaseId, timestamp
+```
+
+- 5xx、网络错误和单次尝试超时最多重试 3 次，等待时间递增并带随机抖动，POST 搜索也包括在内。
+- 400、401、403 和 404 从不重试。当月 429 会立即失败，`searchAll` 中也是如此：REST 从不等待新的配额周期（只有流会等待）。
+- 突发 429 会精确等待 `Retry-After`（没有该头时为 10 秒）后再试一次。默认开启，不计入 `maxRetries`；
+  `retryOnBurst(RetryOnBurst.OFF)` 会立即抛出。
+- 每次调用发送自己的 `X-Request-Id`，重试时保持不变；`requestId()` 携带该值。
+- JDK 的 `HttpClient` 在无法建立连接或连接池中的连接已关闭时，会自行重发 GET。这种重发保留 `X-Request-Id`，不计入
+  `maxRetries`。`-Djdk.httpclient.disableRetryConnect=true` 可关闭连接失败后的重发（对整个 JVM 生效）；连接池连接已关闭时的重发无法关闭。
+- 中断调用线程即可取消调用：等待立即结束，不再重试，调用抛出 `java.util.concurrent.CancellationException`，并恢复中断标志。
+
+## 配置
+
+```java
+FinlightConfig config = FinlightConfig.builder(apiKey)
+    .baseUrl("https://api.finlight.me")       // a trailing slash is fine
+    .wssUrl("wss://wss.finlight.me")          // raw streams use <wssUrl>/raw
+    .timeout(Duration.ofSeconds(30))          // per attempt
+    .totalTimeout(Duration.ofMinutes(2))      // per call, retries included; default none
+    .retryOnBurst(RetryOnBurst.ONCE)
+    .quotaReconnect(true)
+    .build();
+FinlightClient client = new FinlightClient(config);
+```
+
+| Key | Default |
+|---|---|
+| `apiKey` | required, not empty |
+| `baseUrl` | `https://api.finlight.me` |
+| `wssUrl` | `wss://wss.finlight.me` (raw: `/raw`) |
+| `timeout` | 30 s per attempt |
+| `totalTimeout` | none |
+| `maxRetries` | 3 |
+| `retryBaseDelay`, `retryMaxDelay` | 0.5 s, 8 s |
+| `retryOnBurst` | `RetryOnBurst.ONCE`; `RetryOnBurst.OFF` throws at once |
+| `burstWait` | 10 s, only without `Retry-After` |
+| `maxPages` | 10 |
+| `maxResponseBytes` | 32 MiB |
+| `pingInterval` | 25 s |
+| `watchdogTimeout` | 60 s |
+| `rotationInterval` | 115 min |
+| `reconnectBaseDelay`, `reconnectMaxDelay` | 1 s, 30 s |
+| `longBackoff` | 60 s |
+| `quotaReconnect`, `quotaReconnectInterval` | true, 1 h |
+| `searchFailedThreshold` | 5 |
+| `dedupeCacheSize` | 1000 |
+| `maxMessageBytes` | 32 MiB (at least 16 MiB) |
+| `connectTimeout` | 30 s |
+| `clock` | the system clock |
+| `httpClient` | one the SDK creates |
+
+`httpClient(java.net.http.HttpClient)` 将你的客户端用于 REST 和 WebSocket（代理、TLS、执行器）。其连接超时和代理设置生效；
+SDK 从不关闭它。不要再包一层自己的重试：每次尝试都消耗配额。JDK 自身的 GET 重发（见"错误与重试"）同样适用。`client.close()` 会结束该客户端的所有流，并关闭 SDK 自己创建的
+HTTP 客户端。
+
+## 日志
+
+SDK 通过平台日志器 `System.getLogger("finlight")` 记录日志（默认是 java.util.logging，除非你安装了其他后端，例如
+`slf4j-jdk-platform-logging`）。细节记为 DEBUG，问题记为 WARNING；默认不输出其他内容，SDK 也从不直接写 stdout 或 stderr。
+API 密钥、Webhook 密钥、签名和请求体从不出现在日志或错误信息中，`FinlightConfig.toString()` 会隐藏密钥。
+
+## 数据说明
+
+- 旧文章的 `publishedAt` 可能是 `"1970-01-01T00:00:00.000Z"`，按原样交付。
+- 空文本以 null 交付（`summary`、`content`），从不为 `""`。
+- 在角色功能之前标注的文章，其 `role` 和 `relevance` 为 null，`events` 为 `[]`。
+- 对在 id 推出之前收录的文章，`articles().get(id)` 返回 404。请使用 `getByLink`。
+- 较旧文章的 `availableAt` 为 null，raw 流中始终为 null。
+
+## 从 0.1.x 迁移
+
+完整指南见 [docs.finlight.me](https://docs.finlight.me)。简要对照：
+
+| 0.1.x | 1.x |
+|---|---|
+| `FinlightClient.create(key)` | `new FinlightClient(key)` or `new FinlightClient(FinlightConfig.builder(key).build())` |
+| `articles().fetchArticles(GetArticlesParams)` | `articles().search(SearchParams)`, `articles().searchAll(...)` |
+| `page` / `pageSize` | `limit` / `cursor` |
+| `includeContent`, `includeEntities` | `include(IncludeBlock.CONTENT, IncludeBlock.COMPANIES, IncludeBlock.EVENTS)` |
+| `OrderBy.PUBLISH_DATE`, `SortOrder.DESC` | `OrderBy.PUBLISHED_AT`, `SortOrder.DESC` (lowercase on the wire) |
+| `publishDate`, `createdAt` | `publishedAt`, `firstSeenAt` |
+| `images` | `media()` with `url()` |
+| `source` (string) | `source().domain()` |
+| `sentiment`, `confidence` | `sentiment()` (`Gated<Sentiment>`) with `label()` and `confidence()` |
+| `fetchArticleByLink(GetArticleByLinkParams)` | `articles().getByLink(link, LookupOptions)` |
+| `sources().getSources()` | `sources().list()` |
+| `webSocket().connect(params, consumer)` | `client.stream(StreamParams, StreamListener)` |
+| `rawWebSocket()` | `client.rawStream(RawStreamParams, StreamListener)` |
+| `FinlightBlockedException` | `onClosed(terminal)` with a typed `FinlightException` |
+| webhook `isUpdate` | `event.event()` equals `WebhookEventName.ARTICLE_UPDATED` |
+| SLF4J logger | `System.Logger` named `finlight` |
+
+0.1.x 与 1.x 使用相同的包名，不能同时位于一个 classpath。也不要在同一密钥上同时运行 0.1.x 与 1.x 的流：它们共享连接上限。
+
+切换 Webhook：部署 1.x，对 `WrongPayloadVersion` 返回 2xx 并保留 `raw()`，在仪表盘中将 Webhook 切换到 `payloadVersion` 3，
+然后等待约 2 小时，让排队的重试送达。
 
 ## 开发
 
 ```bash
-./gradlew build           # 编译、静态检查（Spotless + Error Prone）、测试
-./gradlew spotlessApply   # 修复代码格式
+./gradlew build                      # compile, unit and conformance tests (no network, no keys), examples
+./gradlew checkConformance           # the vendored kit matches its MANIFEST (sha256)
+./gradlew syncConformance -PkitDir=<monorepo>/shared/contracts/api-v3
+./gradlew test -PjacksonVersion=2.13.5   # with the lowest supported Jackson
 ```
 
-### 针对真实 API 的验证
-
-`local/` 目录已被 gitignore，用于存放冒烟和长跑测试脚本，与 Go 和 .NET 客户端保持一致 —— 凭据请放在环境变量中，切勿写入代码。
-
-```bash
-# 一次性冒烟测试：REST 接口 + 30 秒文章流
-FINLIGHT_API_KEY=sk_... ./gradlew -q smoke
-
-# 长时间流稳定性测试（默认 10 分钟）
-FINLIGHT_API_KEY=sk_... SOAK_MINUTES=60 ./gradlew -q soak
-
-# REST 集成测试（未设置密钥时自动跳过）
-FINLIGHT_API_KEY=sk_... ./gradlew test --tests '*IntegrationSmokeTest'
-```
-
-可选：使用 `FINLIGHT_BASE_URL` / `FINLIGHT_WSS_URL` 指向 dev 环境。
+契约套件（`conformance/`，版本见 `conformance/CONTRACT_VERSION`）随仓库提供，并按其 sha256 `MANIFEST` 校验。
+`CONFORMANCE.md` 将每个套件用例映射到对应测试。`examples/` 中的五个示例由测试套件编译并在本地模拟服务上运行。
+实时检查只针对 dev 环境，不属于 `./gradlew test`，需要 `FINLIGHT_API_KEY`、`FINLIGHT_BASE_URL` 和 `FINLIGHT_WSS_URL`：
+`./gradlew liveTest`。
 
 ## 许可证
 
-[MIT](LICENSE)
-
-## 相关资源
-
-- 中文产品页：https://finlight.me/zh/news-api
+MIT
